@@ -4,7 +4,7 @@ function param = init_xd(param)
     switch param.case_xd
         
         case 0 % straight line in 2d
-            param.xd = NaN( length(t),2)';
+            param.xd = ones( length(t),2)';
             
         case 1 % circle in 2d
             param.xd = param.R_xd*[ ...
