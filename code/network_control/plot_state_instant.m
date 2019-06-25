@@ -37,7 +37,14 @@ if param.Nd == 2
             'MarkerFaceColor',[1 1 1])
     end
     
-    plot( param.xd(1,k), param.xd(2,k), 'k.','Markersize', param.markersize)
+    [pose_a, ~] = get_p_all( param,x);
+    xbar = param.my_1'*pose_a;
+    
+    plot( xbar(1), xbar(2), 'color', param.color_c,...
+        'Marker','.','Markersize', 2*param.markersize)
+    
+    plot( param.xd(1,k), param.xd(2,k), 'color', param.color_d,...
+        'Marker','.','Markersize', 2*param.markersize)
 end
 
 end

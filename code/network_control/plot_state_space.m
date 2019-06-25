@@ -51,7 +51,7 @@ h1 = plot(nan,nan,'color',param.color_a,'linewidth',param.linewidth);
 h2 = plot(nan,nan,'color',param.color_b,'linewidth',param.linewidth);
 h3 = plot(nan,nan,'color',param.color_d,'linewidth',param.linewidth);
 h4 = plot(nan,nan,'color',param.color_c,'linewidth',param.linewidth);
-% legend([h1,h2,h3,h4],'Free','Input','Desired','Centroid','location','best');
+legend([h1,h2,h3,h4],'Free','Input','Desired','Centroid','location','best');
 set(gca,'fontsize',param.fontsize)
 
 end

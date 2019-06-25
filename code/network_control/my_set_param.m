@@ -5,21 +5,21 @@ function param = my_set_param()
     % see documentation for parameters
 
     % switch
-    param.ode45_on = 1;
-    param.gif_on = 0;
+    param.ode45_on = 0;
+    param.gif_on = 1;
     
     % discrete
-    param.dt = 0.001;
-    param.tf = 20;
+    param.dt = 0.01;
+    param.tf = 10;
     param.t = (param.dt:param.dt:param.tf)';
     param.nt = length(param.t);
     
     % analysis
     param.Nd = 2;
-    param.Na = 2;
-    param.Nb = 1;
-    param.R_comm = 10;
-    param.R_des = 0.3;    
+    param.Na = 4;
+    param.Nb = 2;
+    param.R_comm = 3;
+    param.R_des = 1;    
     param.lambda_h = 1;
     param.delta_h = 1;
     param.lambda_v = 1;
@@ -61,10 +61,10 @@ function param = my_set_param()
     % desired traj
     param.case_xd = 1; 
     param.R_xd = 3;
-    param = init_xd(param);    
+    param = init_xd(param);
     
     % filenames
-    param.gif_fn = 'animated.gif';
-    param.gif_buffer = 0.2;
+    param.gif_fn = strcat(pwd,'/','animated.gif');
+    param.gif_buffer = 0.5;
     
 end

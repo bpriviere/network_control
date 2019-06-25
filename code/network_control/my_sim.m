@@ -30,6 +30,12 @@ end
 plot_state_space(param, P, t);
 
 if param.gif_on 
+    try 
+        delete(param.gif_fn)
+    catch
+        '';
+    end
+    
     fprintf('GIF...')
     make_gif(param,x,t,P);
     fprintf('Complete!\n')

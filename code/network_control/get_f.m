@@ -16,9 +16,14 @@ function f = get_f( param, x, t)
                     v_j = get_v( param, x, j);
 
                     r_ij = p_j - p_i;
+                    
                     a_i = a_i + A(i,j)*(...
                         param.kv*(v_j - v_i) + ...
-                        param.kx*r_ij*(1 - param.R_des/norm(r_ij)^3));
+                        param.kx*r_ij*(1 - param.R_des/norm(r_ij)));
+                    
+%                     a_i = a_i + A(i,j)*(...
+%                         param.kv*(v_j - v_i) + ...
+%                         param.kx*r_ij*(1 - param.R_des/norm(r_ij)^3));
                 end
             end
             
