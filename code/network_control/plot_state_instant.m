@@ -1,4 +1,4 @@
-function plot_state_instant(param, x, k)
+function plot_state_instant(param, x, t)
 
 cla(gca);
 
@@ -43,6 +43,7 @@ if param.Nd == 2
     plot( xbar(1), xbar(2), 'color', param.color_c,...
         'Marker','.','Markersize', 2*param.markersize)
     
+    k = get_k(param,t);
     plot( param.xd(1,k), param.xd(2,k), 'color', param.color_d,...
         'Marker','.','Markersize', 2*param.markersize)
 end

@@ -26,6 +26,15 @@ for k = 1:length(t)
     P( :, :, k) = reshape( [p_a; p_b], [param.Nd param.N]);
 end
 
+min_dist = Inf;
+for i_t = 1:length(t)
+    dist = get_min_dist(param,x(:,i_t));
+    if dist < min_dist
+        min_dist = dist;
+    end
+end
+fprintf('Min Dist: %d\n', min_dist);
+
 % plots
 plot_state_space(param, P, t);
 
@@ -39,4 +48,31 @@ if param.gif_on
     fprintf('GIF...')
     make_gif(param,x,t,P);
     fprintf('Complete!\n')
+end
+
+if param.write_traj_file_on
+    fprintf('Writing Trajectory Files...');
+    for i = 1:param.N
+        fn = strcat(param.polyfit_base_fn,sprintf('%d',i),'.csv');
+        data = polyfit_agent_trajectory(param,squeeze(P(:,i,:)),t);
+        
+        % 
+        try
+            delete(fn);
+        catch
+            '';
+        end
+        
+        % write
+        fid = fopen(fn,'w');
+        for i = 1:length(param.polyfit_header)-1
+            fprintf(fid,strcat( string(param.polyfit_header(i)),','));
+        end
+        fprintf(fid,'%s\n',string(param.polyfit_header(end)));
+        fclose(fid);
+        dlmwrite(fn,data,'-append');
+        
+        test_traj_file( fn);
+    end
+    fprintf('Complete!\n');
 end

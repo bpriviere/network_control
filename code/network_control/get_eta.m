@@ -1,7 +1,6 @@
 function eta = get_eta(param, x, t)
 
-    k = floor(t/param.dt);
-    if k > param.nt, k = param.nt; end
+    k = get_k(param,t);
     
     [pose_a, ~] = get_p_all(param,x);
     [vel_a, ~] = get_v_all(param,x);

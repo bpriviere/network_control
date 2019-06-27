@@ -5,6 +5,7 @@ function dxdt = get_dxdt( param, x, t)
     u = get_u( param, x, t);
     
     dxdt = f + g*u;
-
+    
+    fprintf('%d/%d\n', t, param.t(end));
 end
 
