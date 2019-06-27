@@ -5,9 +5,9 @@ function param = my_set_param()
     % see documentation for parameters
 
     % switch
-    param.ode45_on = 0;
+    param.ode45_on = 1;
     param.gif_on = 1;
-    param.write_traj_file_on = 0;
+    param.write_traj_file_on = 1;
     
     % discrete
     param.dt = 0.05;

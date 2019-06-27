@@ -27,9 +27,9 @@ for k = 1:length(t)
 end
 
 min_dist = Inf;
-for i_t = 1:length(t)
-    dist = get_min_dist(param,x(:,i_t));
-    if dist < min_dist
+for k = 1:length(t)
+    dist = get_min_dist(param,x(:,k));
+    if min_dist > dist
         min_dist = dist;
     end
 end
