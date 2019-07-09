@@ -12,8 +12,10 @@ function data = polyfit_agent_trajectory( param, pose_i, t)
 %     subplot(1,2,2)
 %     plot(pose_i(1,:), pose_i(2,:),'linewidth',param.linewidth);
 %     title('Polyfit')
+
+%     figure()
     
-    min_dist = Inf;
+    curr_time = 0;
     data = zeros(length(polyfit_t),33);
     for i_t = 1:length(polyfit_t)
         % find corresponding time index
@@ -35,12 +37,21 @@ function data = polyfit_agent_trajectory( param, pose_i, t)
         duration = t(idx_t_end) - t(idx_t_start);
         data(i_t, 1:17) = [duration, fliplr(poly_x), fliplr(poly_y)];
         
-        t_test = t_clip(1):0.01:t_clip(end);
+        t_test = t_clip(1):1:t_clip(end);
         xval = polyval(poly_x,t_test);
         yval = polyval(poly_y,t_test);
         
+        curr_time = t(idx_t_start);
         
+%         subplot(1,2,1);
+%         plot( curr_time + t_test, xval, 'b','linewidth',param.linewidth);
+%         plot( curr_time + t_clip, pose_x_clip, 'g','linewidth',param.linewidth);
 %         
+%         subplot(1,2,2);
+%         plot( curr_time + t_test, yval, 'b','linewidth',param.linewidth);
+%         plot( curr_time + t_clip, pose_y_clip, 'g','linewidth',param.linewidth);
+%         
+        
 %         subplot(1,2,1);
 %         plot( pose_x_clip, pose_y_clip, 'x--','linewidth',param.linewidth);
 %         subplot(1,2,2);

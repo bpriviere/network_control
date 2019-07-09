@@ -11,10 +11,10 @@ function param = my_set_param()
     
     % discrete
     param.dt = 0.05;
-    param.tf = 100;
+    param.tf = 15;
     param.t = (param.dt:param.dt:param.tf)';
     param.nt = length(param.t);
-    param.polyfit_dt = 10; 
+    param.polyfit_dt = 1; 
     
     % analysis
     param.Nd = 2;
@@ -28,7 +28,7 @@ function param = my_set_param()
     param.delta_v = 1;
     param.p_v = 100;
     param.p_u = 1;
-    param.lambda_a = 1;
+    param.lambda_a = 0.1;
     param.kx = 2;
     param.kv = 2;
     param.k_fdbk = 20; 
@@ -39,7 +39,7 @@ function param = my_set_param()
 
     % environment
     param.p_lim = 1;
-    param.v_lim = 0.2;
+    param.v_lim = 1;
     
     % plotting
     param.fontsize = 20;

@@ -52,9 +52,9 @@ end
 
 if param.write_traj_file_on
     fprintf('Writing Trajectory Files...');
-    for i = 1:param.N
-        fn = strcat(param.polyfit_base_fn,sprintf('%d',i),'.csv');
-        data = polyfit_agent_trajectory(param,squeeze(P(:,i,:)),t);
+    for agent_i = 1:param.N
+        fn = strcat(param.polyfit_base_fn,sprintf('%d',agent_i),'.csv');
+        data = polyfit_agent_trajectory(param,squeeze(P(:,agent_i,:)),t);
         
         % 
         try
@@ -65,14 +65,14 @@ if param.write_traj_file_on
         
         % write
         fid = fopen(fn,'w');
-        for i = 1:length(param.polyfit_header)-1
-            fprintf(fid,strcat( string(param.polyfit_header(i)),','));
+        for header_i = 1:length(param.polyfit_header)-1
+            fprintf(fid,strcat( string(param.polyfit_header(header_i)),','));
         end
         fprintf(fid,'%s\n',string(param.polyfit_header(end)));
         fclose(fid);
-        dlmwrite(fn,data,'-append');
+        dlmwrite(fn,data,'-append','precision','%.16f');
         
-        test_traj_file( fn);
+%         test_traj_file( param,agent_i,fn);
     end
     fprintf('Complete!\n');
 end
