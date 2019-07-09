@@ -1,0 +1,13 @@
+
+
+Todo list:
+
+(0) Literature Review
+	
+(1) Learn \tilde{f}_c
+	Python tracking controller...
+	Make dataset...
+	Imitation Learning...
+	Test...
+(2) 
+
