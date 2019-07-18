@@ -4,7 +4,8 @@ import numpy as np
 import dynamics
 import utilities as util 
 from param import param
-from cvxopt import matrix, solvers
+import cvxpy as cp
+import plotter
 
 def get_u(x,t):
 	# input
@@ -34,10 +35,12 @@ def get_fdbk_controller( x,t):
 	A = np.matmul( np.transpose( my_1), \
 		np.matmul( dvdota_dxtilde, xtilde_dot)) - \
 		util.list_to_vec( param.get('ad')[k,:])
-	B = np.matmul( np.transpose( my_1), dvdota_dvb); 
+	B = np.matmul( np.transpose( my_1), dvdota_dvb)
 	K = param.get('k_fdbk')*np.kron( np.eye(param.get('nd')), \
-		np.ones((1,param.get('gamma'))));
-	u = np.matmul(np.linalg.pinv(B), - A - np.matmul(K,eta));
+		np.ones((1,param.get('gamma'))))
+	u = np.matmul(np.linalg.pinv(B), - A - np.matmul(K,eta))
+
+	u = np.clip( u, -param.get('control_max'), param.get('control_max'))
 	return u
 
 def get_clf_controller( x,t):
@@ -47,55 +50,96 @@ def get_clf_controller( x,t):
 	V   = dynamics.get_V( x,t)
 	lambda_v = util.get_stabilization_rate()
 
-	# if LfV + lambda_v*V < 0:
-	# 	u = np.zeros( (param.get('m'),1))
-	# else:
-	# 	u = np.matmul( np.linalg.pinv( LgV), -LfV - lambda_v*V)
+	# cvxpy
+	u = cp.Variable(param.get('m'))
+	delta_v = cp.Variable()
+	constraints = [ 
+		LfV + LgV*u + lambda_v * V <= delta_v,
+		cp.abs( u)  <= param.get('control_max'),
+		delta_v >= 0
+	]
+	obj = cp.Minimize( \
+		cp.sum_squares(u) + \
+		param.get('p_v') * delta_v \
+		)
+	
+	prob = cp.Problem(obj, constraints)
+	prob.solve(verbose = True, solver = cp.ECOS)
+	
+	u = util.list_to_vec([x for x in u.value])
+	param['u_prev'] = u
+	return u
 
-	# solve using cvx solver
-	# min xTQx + pTx 
-	# st. G x < h
-	#     A x = b
-	Q = matrix( np.eye( param.get('m')))
-	p = matrix( np.zeros( (param.get('m'),1)))
-	G = matrix( LgV)
-	h = matrix( -LfV - lambda_v*V)
-	A = matrix( np.zeros( (param.get('m'), param.get('m'))))
-	b = matrix( np.zeros( (param.get('m'), 1)))
+def get_scp_clf_controller():
 
-	sol = solvers.qp(Q, p, G, h)
-	u = sol['x']
-	return util.list_to_vec([x for x in u])
+	xbar, ubar = get_scp_initial_trajectory()
+	lambda_v = util.get_stabilization_rate()*param.get('dt')
+
+	T = param.get('T')
+	p_v = param.get('p_v')
+	control_max = param.get('control_max')
+
+	u  = cp.Variable( param.get('m'), len(T) )
+	tx = cp.Variable( param.get('n'), len(T) )
+	tV = cp.Variable( len(T))
+	delta_v = cp.Variable( len(T)-1 )
+
+	print('Building Problem')
+	constraints = []
+	obj_fn = cp.sum_squares( u)
+	for k in range( len(T)):
+		if k < len(T)-1:
+			F_k, B_k, d_k = dynamics.get_linear_dynamics( xbar[k], ubar[k], T[k])
+
+			constraints.append( 
+				tV[k+1] <= (1-lambda_v) * tV[k] + delta_v[k])
+
+			constraints.append(
+				tx[:,k] == F_k * tx[:,k] + B_k * u[:,k] + d_k)
+
+			constraints.append(
+				delta_v[k] >= 0)
+
+			obj_fn += p_v * delta_v[k]
+
+		R_k, w_k = dynamics.get_linear_lyapunov( xbar[k], ubar[k], T[k])
+		constraints.append( 
+			tV[k] == R_k * tx[:,k] + w_k)
+		constraints.append( 
+			cp.abs(u) <= control_max)
+
+	obj = cp.Minimize( obj_fn)
+	prob = cp.Problem( obj, constraints)
+
+	prob.solve(verbose = True, solver = cp.ECOS)
+
+	X = np.transpose(np.squeeze(np.asarray([y for y in tx.value])))
+	U = np.asarray([y for y in u.value])
+
+	plotter.plot_SS( np.squeeze(xbar), T)
+	plotter.plot_SS( X, T)
+
+	return
+
 
 def get_mpc_clf_controller( x,t):
+	pass
 
-	LgV_t = []
-	LfV_t = []
-	V_t = []
-	x_t 
-	for i_t in range(param.get('mpc_horizon')):
-		LgV_t.append( dynamics.get_LgV( x,t) )
+def get_scp_initial_trajectory():
+	# use feedback linearizing solution
 
-	LfV = dynamics.get_LfV( x,t)
-	V   = dynamics.get_V( x,t)
-	lambda_v = util.get_stabilization_rate()
+	X = []
+	U = []
+	x_curr = param.get('x0')
+	print(param.get('controller'))
+	for t in param.get('T'):
+		u_curr = get_u( x_curr, t) 
+		x_next = x_curr + dynamics.get_dxdt( x_curr, u_curr, t) * param.get('dt')
 
-	if LfV + lambda_v*V < 0:
-		u = np.zeros( (param.get('m'),1))
-	else:
-		u = np.matmul( np.linalg.pinv( LgV), -LfV - lambda_v*V)
+		X.append(x_curr)
+		U.append(u_curr)
+		x_curr = x_next
 
-	# solve using cvx solver
-	# min xTQx + pTx 
-	# st. G x < h
-	#     A x = b
-	# Q = matrix( np.eye( param.get('m')))
-	# p = matrix( np.zeros( (param.get('m'),1)))
-	# G = matrix( LgV)
-	# h = matrix( -LfV - lambda_v*V)
-	# A = matrix( np.zeros( (param.get('m'), param.get('m'))))
-	# b = matrix( np.zeros( (param.get('m'), 1)))
-
-	# sol = solvers.qp(Q, p, G, h)
-	# u = sol['x']
-	return util.list_to_vec([x for x in u])
+	X = np.asarray(X)
+	U = np.asarray(U)
+	return X,U

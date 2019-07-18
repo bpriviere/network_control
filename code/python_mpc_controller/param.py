@@ -4,8 +4,8 @@ param = {
 	
 	# time
 	't0' : 0., 
-	'tf' : 5.,
-	'dt' : .005,
+	'tf' : 20,
+	'dt' : 0.1,
 
 	# agents
 	'na' : 2,
@@ -16,19 +16,24 @@ param = {
 
 	# dynamics
 	'model' : 'reynolds', 
-	'k_fdbk' : 10, 
 	'kx' : 1, 
 	'kv' : 1,
 	'R_des' : 1, 
-	'controller' : 'clf', # [ 'empty', 'fdbk', 'clf', 'mpc-clf']
 	'gamma': 3, # relative degree ( do not change)
-	'mpc_horizon' : 10, # in timesteps
+	
+	# controller
+	'controller' : 'fdbk', # [ 'empty', 'fdbk', 'clf', 'scp-clf']
+	'mpc_horizon' : 10, # in timesteps	
+	'control_max' : 1, 
+	'p_u' : 0, 
+	'p_v' : 2000, 
+	'k_fdbk' : 100, 
 
 	# desired trajectory of swarm centroid
 	# 0: x_d(t) = (1,1) (point)
 	# 1: x_d(t) = (t,t) (line at 45 degrees)
 	# 2: x_d(t) = circle 
-	'case_xd' : 2, 	
+	'case_xd' : 2,
 
 	# initialization
 	'plim' : 1,
@@ -59,4 +64,4 @@ param['n'] = 2 * param.get('nd') * param.get('ni')
 # input dimension
 param['m'] = param.get('nd') * param.get('nb')
 
-
+param['u_prev'] = np.zeros((param.get('m'),1))

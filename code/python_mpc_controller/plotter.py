@@ -16,6 +16,7 @@ def plot_V(V,T):
 	ax.plot(T,np.squeeze(Vdot),label = 'Vdot')
 	plt.title('Lyapunov Convergence')
 	plt.legend()
+	ax.grid(True)
 
 def plot_U(U,T):
 	fig, ax = plt.subplots()
@@ -32,23 +33,34 @@ def plot_test( V, LgV, LfV, U, T):
 	Vdot_n = np.gradient(V, param.get('dt'), axis = 0)
 	Vdot_a = []
 	for t in range(len(T)):
-		Vdot_a.append( np.matmul( LgV[t], U[t]))
+		Vdot_a.append( LfV[t] + np.matmul( LgV[t], U[t]))
 	Vdot_a = np.asarray(Vdot_a)
 
 	fig, ax = plt.subplots()
 	plt.plot( T, np.squeeze(V), label = 'V')
-	plt.plot( T, np.squeeze(Vdot_n), label = 'Vdot N')
-	plt.plot( T, np.squeeze(Vdot_a), label = 'Vdot A')
-	plt.plot( T, np.squeeze(LfV), label = 'LfV')
-	plt.plot( T, np.squeeze(LgV[:,0,0]), label = 'LgV 0')
-	plt.plot( T, np.squeeze(LgV[:,0,1]), label = 'LgV 1')
+	plt.plot( T, np.squeeze(Vdot_n), label = 'Vdot n')
+	plt.plot( T, np.squeeze(Vdot_a), label = 'Vdot a')
 	plt.legend()
 	plt.title('Testing')
+
+def plot_test2( pe, ve, ae, T):
+
+	fig, ax = plt.subplots()
+	plt.plot( T, pe[:,0], label = 'pe_x')
+	plt.plot( T, pe[:,1], label = 'pe_y')
+	plt.plot( T, ve[:,0], label = 've_x')
+	plt.plot( T, ve[:,1], label = 've_y')
+	plt.plot( T, ae[:,0], label = 'ae_x')
+	plt.plot( T, ae[:,1], label = 'ae_y')
+	plt.legend()
+	plt.title('Errors')
+
 
 
 def plot_SS(X,T):
 
 	fig, ax = plt.subplots()
+	plt.axis('equal')
 
 	# plot agents
 	for i in range(param.get('ni')):

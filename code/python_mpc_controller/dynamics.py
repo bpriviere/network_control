@@ -7,7 +7,7 @@ from param import param
 def get_dxdt(x,u,t):
 
     f = get_f(x)
-    g = get_g()
+    g = get_g(x)
     dxdt = f + np.matmul(g,u);
     return dxdt
 
@@ -31,7 +31,7 @@ def get_f(x):
 	# flattens list of list into a single list, then converts to numpy array
 	return util.list_of_list_to_vec(f)
 
-def get_g():
+def get_g(x):
 	# control matrix
 	g = np.zeros( [param.get('n'), param.get('m')])
 
@@ -46,7 +46,7 @@ def get_g():
 def get_LgV( x,t):
 	dVdeta = get_dVdeta(x,t)
 	detadx = get_detadx(x,t)
-	g 	   = get_g()
+	g 	   = get_g(x)
 	return np.matmul( dVdeta, np.matmul( detadx, g))
 
 def get_LfV( x,t):
@@ -83,13 +83,18 @@ def get_detadx(x,t):
 		np.matmul(np.transpose(my_1), dvdota_dva), \
 		np.matmul(np.transpose(my_1), dvdota_dpb), \
 		np.matmul(np.transpose(my_1), dvdota_dvb)))
-	return util.permute_rows(np.vstack( (row_1, row_2, row_3)))
+
+	detadx = np.vstack( (row_1, row_2, row_3))
+	detadx = util.permute_rows(detadx)
+	detadx = util.permute_cols(detadx)
+
+	return detadx
 
 def get_detadt( x,t):
 	k = np.where(param.get('T') == t)[0][0]
-	yp  = - util.list_to_vec( param.get('vd')[k,:])
-	ypp = - util.list_to_vec( param.get('ad')[k,:]) 
-	yppp= - util.list_to_vec( param.get('jd')[k,:]) 
+	yp   = - util.list_to_vec( param.get('vd')[k,:])
+	ypp  = - util.list_to_vec( param.get('ad')[k,:]) 
+	yppp = - util.list_to_vec( param.get('jd')[k,:]) 
 	detadt = np.vstack( (yp, ypp, yppp));
 	return util.permute_rows( detadt);
 
@@ -98,13 +103,13 @@ def get_eta( x,t):
 
 	k = np.where(param.get('T') == t)[0][0]
 	my_1 = util.get_my_1()
-	pose_a = util.get_p_a( x);
-	vel_a  = util.get_v_a( x);
+	p_a = util.get_p_a( x);
+	v_a  = util.get_v_a( x);
 	vdot_a = get_vdot_a( x,t);
 
-	y   = np.matmul( np.transpose(my_1), pose_a) \
+	y   = np.matmul( np.transpose(my_1), p_a) \
 		- util.list_to_vec( param.get('pd')[k,:])
-	yp  = np.matmul( np.transpose(my_1), vel_a) \
+	yp  = np.matmul( np.transpose(my_1), v_a) \
 		- util.list_to_vec( param.get('vd')[k,:])
 	ypp = np.matmul( np.transpose(my_1), vdot_a) \
 		- util.list_to_vec( param.get('ad')[k,:])
@@ -227,30 +232,58 @@ def get_reynolds_velocity_derivative_ij( x, i, j):
 	A = util.get_A(x)
 	return A[i,j]*param.get('kv')*np.eye(param.get('nd'))
 
-def get_linearized_dynamics( xbar, ubar, t):
+def get_linear_dynamics( xbar, ubar, t):
 
-	#  xdot = h(x,u) = f(x) + g(x)u
-	dhdx = get_dfdx(xbar)
-	dhdu = get_g()
+	def prod(dgdx, u):
+		s = 0
+		for i in range(len(u)):
+			s += dgdx[:,i,:]*u[i]
+		return np.squeeze(s)
 
-	# continuous linearized dynamics
-	A  = dhdx 
-	B  = dhdu
-	d  = np.matmul( -dhdx, xbar) + np.matmul( -dhdu, ubar) + \
-		get_f(xbar) + np.matmul( get_g(), ubar)
+	dfdx = get_dfdx(xbar,t)
+	dgdx = get_dgdx(xbar)
+	g = get_g(xbar)
+	f = get_f(xbar)
 
-	# discretize
-	Ad = np.eye( param.get('n')) + A*param.get('dt')
-	Bd = B*param.get('dt')
-	dd = d*param.get('dt')
-	return Ad, Bd, dd
+	# continuous time 
+	F = dfdx + prod(dgdx,ubar)
+	B = g
+	d = f + np.matmul( g, ubar) \
+		- np.matmul( dfdx, xbar) \
+		- np.matmul( prod( dgdx, ubar), xbar) \
+		- np.matmul( g, ubar)
 
-def get_dfdx(x):
+	# discrete time
+	F_k = np.eye(param.get('n')) + F*param.get('dt') 
+	B_k = B*param.get('dt')
+	d_k = d*param.get('dt')
 
-	O_a = np.zeros((param.get('na')*param.get('nd'), \
+	return F_k, B_k, d_k
+
+def get_linear_lyapunov( xbar, ubar, t):
+
+	dVdeta = get_dVdeta( xbar, t)
+	detadx = get_detadx( xbar, t)
+	V = get_V( xbar, t)
+
+	R_k = np.matmul( dVdeta, detadx)
+	w_k = V - np.matmul( dVdeta, np.matmul( detadx, xbar))
+	return R_k, w_k
+
+def get_dgdx(x):
+	dgdx = np.zeros( (param.get('n'), param.get('m'), param.get('n')) )
+	return dgdx
+
+def get_dfdx(x,t):
+
+	O_aa = np.zeros((param.get('na')*param.get('nd'), \
 		param.get('na')*param.get('nd')))
-	O_b = np.zeros((param.get('nb')*param.get('nd'), \
+	O_bb = np.zeros((param.get('nb')*param.get('nd'), \
 		param.get('nb')*param.get('nd')))
+	O_ab = np.zeros((param.get('na')*param.get('nd'), \
+		param.get('nb')*param.get('nd')))
+	O_ba = np.zeros((param.get('nb')*param.get('nd'), \
+		param.get('na')*param.get('nd')))
 	I_a = np.eye(param.get('na')*param.get('nd'))
 	I_b = np.eye(param.get('nb')*param.get('nd'))
 	
@@ -259,9 +292,14 @@ def get_dfdx(x):
 	dvdotadpb = get_dvdota_dpb( x, t)
 	dvdotadvb = get_dvdota_dvb( x, t)
 
-	row1 = np.hstack( (O_a, I_a, O_a, O_a))
+	row1 = np.hstack( (O_aa, I_a, O_ab, O_ab))
 	row2 = np.hstack( (dvdotadpa, dvdotadva, dvdotadpb, dvdotadvb))
-	row3 = np.hstack( (O_b, O_b, I_b, O_b))
-	row4 = np.hstack( (O_b, O_b, O_b, O_b))
+	row3 = np.hstack( (O_ba, O_ba, I_b, O_bb))
+	row4 = np.hstack( (O_ba, O_ba, O_bb, O_bb))
 
-	return util.permute_rows(np.vstack( (row1, row2, row3, row4)))
+	dfdx = np.vstack( (row1, row2, row3, row4))
+	dfdx = util.permute_cols(dfdx)
+	dfdx = util.permute_rows_2(dfdx)
+	# dfdx = util.permute_cols(np.transpose(dfdx))
+
+	return dfdx

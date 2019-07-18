@@ -1,6 +1,6 @@
 
 from param import param
-from scipy.linalg import solve_lyapunov
+from scipy.linalg import solve_lyapunov, block_diag
 import numpy as np 
 
 
@@ -71,16 +71,30 @@ def get_V( X, i):
 	return X[:,state_idx:state_idx+param.get('nd')]
 
 def get_lyapunov_metric():
-	n_eta = param.get('nd')*param.get('gamma')
-	A = np.eye( n_eta-1)
-	A = np.vstack( (A, -param.get('k_fdbk')*np.ones( (1, n_eta-1))))
-	A = np.hstack( (np.vstack( (np.zeros((n_eta-1,1)), -param.get('k_fdbk'))), A))
-	return solve_lyapunov( A, -np.eye(n_eta))
+
+	# closed loop output dynamics for single output
+	a_cl = np.eye(param.get('gamma') - 1)
+	a_cl = np.hstack(( \
+		np.zeros( (param.get('gamma')-1,1)), a_cl \
+		))
+	a_cl = np.vstack(( \
+		a_cl, -param.get('k_fdbk')*np.ones((1, param.get('gamma'))) \
+		))
+
+	# full closed loop output dynamics
+	A_cl = a_cl
+	for _ in range(param.get('nd')-1):
+		A_cl = block_diag( A_cl, a_cl)
+
+	# solution to lyapunov equation
+	P = solve_lyapunov( np.transpose(A_cl), \
+		-np.eye(param.get('nd')*param.get('gamma')))
+	return P
 
 def get_stabilization_rate():
 	P = get_lyapunov_metric()
 	l, v = np.linalg.eig(P)
-	return np.min(l)/2.
+	return 1/np.max(l)
 
 def get_my_1():
 	return np.kron(np.ones((param.get('na'),1)),np.eye(param.get('nd')))/ \
@@ -155,6 +169,54 @@ def permute_rows( x):
 			perm_mat[row_idx, col_idx] = 1
 			row_idx += 1
 	return np.matmul( perm_mat, x)
+	# return x
+
+def permute_rows_2( x):
+
+	perm_mat = np.zeros( (param.get('n'), param.get('n')))
+	for i_a in range(param.get('na')):
+		old_p_idx = i_a*param.get('nd')
+		old_v_idx = i_a*param.get('nd') + param.get('na')*param.get('nd')
+		new_p_idx = i_a*2*param.get('nd')
+		new_v_idx = i_a*2*param.get('nd') + param.get('nd')
+		for i_d in range(param.get('nd')):
+			perm_mat[ old_p_idx+i_d, new_p_idx+i_d] = 1
+			perm_mat[ old_v_idx+i_d, new_v_idx+i_d] = 1
+
+	for i_b in range(param.get('nb')):
+		old_p_idx = i_b*param.get('nd') + 2*param.get('na')*param.get('nd')
+		old_v_idx = old_p_idx + param.get('nb')*param.get('nd')
+		new_p_idx = i_b*2*param.get('nd') + 2*param.get('na')*param.get('nd')
+		new_v_idx = new_p_idx + param.get('nd')
+		for i_d in range(param.get('nd')):
+			perm_mat[ old_p_idx+i_d, new_p_idx+i_d] = 1
+			perm_mat[ old_v_idx+i_d, new_v_idx+i_d] = 1
+		
+	return np.matmul( perm_mat,x)
+
+
+def permute_cols( x):
+
+	perm_mat = np.zeros( (param.get('n'), param.get('n')))
+	for i_a in range(param.get('na')):
+		old_p_idx = i_a*param.get('nd')
+		old_v_idx = i_a*param.get('nd') + param.get('na')*param.get('nd')
+		new_p_idx = i_a*2*param.get('nd')
+		new_v_idx = i_a*2*param.get('nd') + param.get('nd')
+		for i_d in range(param.get('nd')):
+			perm_mat[ old_p_idx+i_d, new_p_idx+i_d] = 1
+			perm_mat[ old_v_idx+i_d, new_v_idx+i_d] = 1
+
+	for i_b in range(param.get('nb')):
+		old_p_idx = i_b*param.get('nd') + 2*param.get('na')*param.get('nd')
+		old_v_idx = old_p_idx + param.get('nb')*param.get('nd')
+		new_p_idx = i_b*2*param.get('nd') + 2*param.get('na')*param.get('nd')
+		new_v_idx = new_p_idx + param.get('nd')
+		for i_d in range(param.get('nd')):
+			perm_mat[ old_p_idx+i_d, new_p_idx+i_d] = 1
+			perm_mat[ old_v_idx+i_d, new_v_idx+i_d] = 1
+		
+	return np.matmul( x, perm_mat)
 
 def get_x0():
 
@@ -177,7 +239,7 @@ def get_x0():
 			print('Error: Incompatible Initial Conditions')
 			return 
 
-	return list_of_list_to_vec(x0)
+	param['x0'] = list_of_list_to_vec(x0)
 
 def get_xd():
 

@@ -9,46 +9,60 @@ import subprocess, os, timeit
 
 def main():
 
+	np.random.seed(88)
+
+	util.get_x0()
 	util.get_xd()
-
-	X = []
-	U = []
-	V = []
-	LgV = []
-	LfV = []
-
-	x_curr = util.get_x0()
+	controllers = [ 'fdbk', 'clf']
 	print('Sim...')
-	for t in param.get('T'):
+	for u in controllers:
+		param['controller'] = u
 		
-		u_curr = controller.get_u( x_curr,t)
-		x_next = x_curr + dynamics.get_dxdt(x_curr,u_curr,t) * param.get('dt')
+		X = []
+		U = []
+		V = []
+		pbar = []
+		vbar = []
+		abar = []
+		x_curr = param.get('x0')
+		for t in param.get('T'):
+			
+			u_curr = controller.get_u( x_curr,t)
+			x_next = x_curr + dynamics.get_dxdt(x_curr,u_curr,t) * param.get('dt')
 
-		X.append(x_curr)
-		U.append(u_curr)
-		V.append(dynamics.get_V( x_curr,t))
+			X.append(x_curr)
+			U.append(u_curr)
+			V.append(dynamics.get_V( x_curr,t))
 
-		# temp 
-		LgV.append( dynamics.get_LgV(x_curr, t))
-		LfV.append( dynamics.get_LfV(x_curr, t))
+			# temp 
+			pbar.append( np.matmul( \
+				np.transpose( util.get_my_1()), util.get_p_a(x_curr)))
+			vbar.append( np.matmul( \
+				np.transpose( util.get_my_1()), util.get_v_a(x_curr)))
+			abar.append( np.matmul( \
+				np.transpose( util.get_my_1()), dynamics.get_vdot_a(x_curr,t)))
 
-		x_curr = x_next
-		print( '\t' + str(t) + '/' + str(param.get('T')[-1]))
+			x_curr = x_next
+			print( '\t' + str(t) + '/' + str(param.get('T')[-1]))
 
-		return
+		X = np.squeeze(np.asarray(X))
+		U = np.squeeze(np.asarray(U))
+		V = np.asarray(V)
+		pbar = np.asarray(pbar)
+		vbar = np.asarray(vbar)
+		abar = np.asarray(abar)
 
-	X = np.squeeze(np.asarray(X))
-	U = np.squeeze(np.asarray(U))
-	V = np.asarray(V)
-	LgV = np.asarray(LgV)
-	LfV = np.asarray(LfV)
+		print('Plots...')
+		plotter.plot_SS(X,param.get('T'))
+		plotter.plot_V( V, param.get('T'))
+		plotter.plot_U( U,param.get('T'))
+		plotter.plot_test2( \
+			np.squeeze(pbar) - param.get('pd'), \
+			np.squeeze(vbar) - param.get('vd'), \
+			np.squeeze(abar) - param.get('ad'), \
+			param.get('T'))
 
-	print('Plots...')
-	plotter.plot_SS(X,param.get('T'))
-	plotter.plot_V( V, param.get('T'))
-	plotter.plot_U( U,param.get('T'))
-	plotter.plot_test( V, LgV, LfV, U, param.get('T'))
-	# plotter.show()
+
 	plotter.save_figs()
 	print('Plots Complete')
 
