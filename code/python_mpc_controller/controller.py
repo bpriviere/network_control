@@ -5,11 +5,13 @@ import dynamics
 import utilities as util 
 from param import param
 import cvxpy as cp
+# from scipy import LinearConstraint, NonLinearConstraint, minimize
 import plotter
 
 def get_u(x,t):
 	# input
 
+	cost = 0.0
 	if param.get('controller') is 'empty':
 		u = np.zeros( [param.get('m'),1])
 
@@ -19,10 +21,10 @@ def get_u(x,t):
 	elif param.get('controller') is 'clf':
 		u = get_clf_controller( x,t)
 
-	elif param.get('controller') is 'mpc-clf':
-		u = get_mpc_clf_controller( x,t)
+	elif param.get('controller') is 'scp':
+		u, cost = get_scp_clf_controller()
 
-	return u
+	return u, cost
 
 def get_fdbk_controller( x,t):
 	k 			   = np.where(param.get('T') == t)[0][0]
@@ -65,62 +67,87 @@ def get_clf_controller( x,t):
 	
 	prob = cp.Problem(obj, constraints)
 	prob.solve(verbose = True, solver = cp.ECOS)
-	
+
 	u = util.list_to_vec([x for x in u.value])
-	param['u_prev'] = u
 	return u
 
 def get_scp_clf_controller():
 
-	xbar, ubar = get_scp_initial_trajectory()
-	lambda_v = util.get_stabilization_rate()*param.get('dt')
-
+	lambda_v = util.get_stabilization_rate()
 	T = param.get('T')
 	p_v = param.get('p_v')
 	control_max = param.get('control_max')
+	tau_trust = param.get('tau_trust')
+	dt = param.get('dt')
+	max_iters = param.get('max_iters')
 
-	u  = cp.Variable( param.get('m'), len(T) )
-	tx = cp.Variable( param.get('n'), len(T) )
-	tV = cp.Variable( len(T))
-	delta_v = cp.Variable( len(T)-1 )
+	i_iter = 0
+	C = []
+	C.append(np.inf)
+	cost_diff = np.inf
+	while i_iter < param.get('n_scp_iter') and cost_diff > param.get('scp_tol'):
+	
+		print('SCP Iteration: ' + str(i_iter) + '/' + str(param.get('n_scp_iter')))
 
-	print('Building Problem')
-	constraints = []
-	obj_fn = cp.sum_squares( u)
-	for k in range( len(T)):
-		if k < len(T)-1:
-			F_k, B_k, d_k = dynamics.get_linear_dynamics( xbar[k], ubar[k], T[k])
+		if i_iter == 0:
+			xbar, ubar = get_scp_initial_trajectory()
+		else:
+			xbar = np.transpose( np.asarray([y for y in tx.value]), (0,2,1))
+			ubar = np.transpose( np.asarray([y for y in u.value]),  (0,2,1))
+
+		if np.mod( i_iter, 1) == 0:
+			plotter.plot_SS( xbar, param.get('T'), title = 'SCP Iteration: ' + str(i_iter))
+
+		u  = cp.Variable( len(T), param.get('m') )
+		tx = cp.Variable( len(T), param.get('n') )
+		tV = cp.Variable( len(T),1)
+		delta_v = cp.Variable( len(T)-1,1 )
+
+		constraints = []
+		constraints.append( tx[0,:].T == param.get('x0'))
+
+		for k in range( len(T)):
+			if k < len(T)-1:
+				F_k, B_k, d_k = dynamics.get_linear_dynamics( xbar[k], ubar[k], T[k])
+
+				constraints.append( 
+					tV[k+1] <= (1-lambda_v*dt) * tV[k] + delta_v[k]*dt)
+
+				constraints.append(
+					tx[k+1,:].T == F_k * tx[k,:].T + B_k * u[k,:].T + d_k)
+
+				constraints.append(
+					delta_v[k] >= 0)
+
+			R_k, w_k = dynamics.get_linear_lyapunov( xbar[k], ubar[k], T[k])
 
 			constraints.append( 
-				tV[k+1] <= (1-lambda_v) * tV[k] + delta_v[k])
+				tV[k] == R_k * tx[k,:].T + w_k)
 
-			constraints.append(
-				tx[:,k] == F_k * tx[:,k] + B_k * u[:,k] + d_k)
+			constraints.append( 
+				cp.abs(tx[k,:].T-xbar[k]) <= tau_trust)
 
-			constraints.append(
-				delta_v[k] >= 0)
+			constraints.append( 
+				cp.abs(u[k,:]) <= control_max)
 
-			obj_fn += p_v * delta_v[k]
+		# obj = cp.Minimize( obj_fn)
+		obj = cp.Minimize( p_v*sum(delta_v) + cp.sum_squares(u))
+		prob = cp.Problem( obj, constraints)
 
-		R_k, w_k = dynamics.get_linear_lyapunov( xbar[k], ubar[k], T[k])
-		constraints.append( 
-			tV[k] == R_k * tx[:,k] + w_k)
-		constraints.append( 
-			cp.abs(u) <= control_max)
+		prob.solve(verbose = True, solver = cp.GUROBI,  max_iters = max_iters)
+		print(prob.status)
+		print(prob.value)
 
-	obj = cp.Minimize( obj_fn)
-	prob = cp.Problem( obj, constraints)
+		i_iter += 1
+		C.append( prob.value)
+		cost_diff = np.abs(C[-1]-C[-2])
+		print(cost_diff)
 
-	prob.solve(verbose = True, solver = cp.ECOS)
 
-	X = np.transpose(np.squeeze(np.asarray([y for y in tx.value])))
+	X = np.squeeze(np.asarray([y for y in tx.value]))
 	U = np.asarray([y for y in u.value])
 
-	plotter.plot_SS( np.squeeze(xbar), T)
-	plotter.plot_SS( X, T)
-
-	return
-
+	return U,C
 
 def get_mpc_clf_controller( x,t):
 	pass
@@ -131,9 +158,9 @@ def get_scp_initial_trajectory():
 	X = []
 	U = []
 	x_curr = param.get('x0')
-	print(param.get('controller'))
+
 	for t in param.get('T'):
-		u_curr = get_u( x_curr, t) 
+		u_curr = get_fdbk_controller( x_curr, t) 
 		x_next = x_curr + dynamics.get_dxdt( x_curr, u_curr, t) * param.get('dt')
 
 		X.append(x_curr)

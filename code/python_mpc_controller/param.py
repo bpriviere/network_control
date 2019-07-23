@@ -1,67 +1,64 @@
 import numpy as np 
 
-param = {
-	
-	# time
-	't0' : 0., 
-	'tf' : 20,
-	'dt' : 0.1,
+param = {}
 
-	# agents
-	'na' : 2,
-	'nb' : 1,
-
-	# dimension
-	'nd' : 2, 
-
-	# dynamics
-	'model' : 'reynolds', 
-	'kx' : 1, 
-	'kv' : 1,
-	'R_des' : 1, 
-	'gamma': 3, # relative degree ( do not change)
-	
-	# controller
-	'controller' : 'fdbk', # [ 'empty', 'fdbk', 'clf', 'scp-clf']
-	'mpc_horizon' : 10, # in timesteps	
-	'control_max' : 1, 
-	'p_u' : 0, 
-	'p_v' : 2000, 
-	'k_fdbk' : 100, 
-
-	# desired trajectory of swarm centroid
-	# 0: x_d(t) = (1,1) (point)
-	# 1: x_d(t) = (t,t) (line at 45 degrees)
-	# 2: x_d(t) = circle 
-	'case_xd' : 2,
-
-	# initialization
-	'plim' : 1,
-	'vlim' : 1,
-	'min_dist' : 1, 
-
-	# plotting
-	'ControlAgentColor' : 'r', 
-	'FreeAgentColor' : 'b',
-	'DesiredTrajectoryColor' : 'g',
-	'CentroidColor': 'k',
-	'start_marker' : 's', 
-	'stop_marker' : 'x', 
-	'plot_buffer': 0.2, 
-	'gif_on': 0, 
-	'nframes_gif' : 50, 
-	'fn_gif' : 'gif.gif', 
-	'fn_plots' : 'plots.pdf', 
-}
-
-# time vector
+# time
+param['t0'] = 0.
+param['tf'] = 20.
+param['dt'] = 0.05
 T = np.arange( param.get('t0'), param.get('tf'), param.get('dt'))
 param['T'] = np.reshape(T, (len(T),-1))
-# total number of agents
+param['nt'] = len(param.get('T'))
+
+# agents
+param['na'] = 5
+param['nb'] = 1
 param['ni'] = param.get('na') + param.get('nb')
-# state dimension
+
+# dimension
+param['nd'] = 2
 param['n'] = 2 * param.get('nd') * param.get('ni')
-# input dimension
 param['m'] = param.get('nd') * param.get('nb')
 
-param['u_prev'] = np.zeros((param.get('m'),1))
+# dynamics
+param['model'] = 'reynolds'
+param['kx'] = 1.
+param['kv'] = 1.
+param['R_des'] = 1.
+param['gamma'] = 3
+
+# controller
+# [ 'empty', 'fdbk', 'clf', 'scp-clf']
+param['controllers'] = [ 'fdbk','clf', 'scp']
+param['mpc_horizon'] = 10 
+param['control_max'] = 1
+param['k_fdbk'] = 100
+
+# desired trajectory
+param['case_xd'] = 2
+
+# solver
+param['max_iters'] = 2000
+param['n_scp_iter'] = 1
+param['scp_tol'] = 0.1
+param['p_u'] = 0 
+param['p_v'] = 100
+param['tau_trust'] = 0.5
+
+# init
+param['plim'] = 1 
+param['vlim'] = 1 
+param['min_dist'] = 1 
+
+# plotting
+param['ControlAgentColor'] = 'r'
+param['FreeAgentColor'] = 'b'
+param['DesiredTrajectoryColor'] = 'g'
+param['CentroidColor'] = 'k'
+param['start_marker'] = 's'
+param['stop_marker'] = 'x'
+param['plot_buffer'] = '0.2'
+param['gif_on'] = False
+param['nframes_gif'] = '50'
+param['fn_gif'] = 'gif.gif'
+param['fn_plots'] = 'plots.pdf'

@@ -85,10 +85,30 @@ def get_detadx(x,t):
 		np.matmul(np.transpose(my_1), dvdota_dvb)))
 
 	detadx = np.vstack( (row_1, row_2, row_3))
-	detadx = util.permute_rows(detadx)
-	detadx = util.permute_cols(detadx)
+	detadx = util.permute_eta_rows(detadx)
+	detadx = util.permute_x_cols(detadx)
 
 	return detadx
+
+def calc_cost( U):
+
+	lambda_v = util.get_stabilization_rate()
+	cost = 0
+	x_curr = param.get('x0')
+	for k,t in enumerate( param.get('T')):
+		if k < param.get('nt')-1:
+			u_curr = np.reshape( U[k,:], (param.get('m'),1))
+			x_next = x_curr + get_dxdt( x_curr, u_curr, t) * param.get('dt')
+
+			v_curr = get_V(x_curr, t)
+			v_next = get_V(x_next, param.get('T')[k+1])
+			delta_v = np.max((0, \
+				(v_next - v_curr)/param.get('dt') + lambda_v * v_curr))
+
+			cost += np.linalg.norm( u_curr) + param.get('p_v')*delta_v
+			x_curr = x_next
+
+	return cost
 
 def get_detadt( x,t):
 	k = np.where(param.get('T') == t)[0][0]
@@ -96,7 +116,7 @@ def get_detadt( x,t):
 	ypp  = - util.list_to_vec( param.get('ad')[k,:]) 
 	yppp = - util.list_to_vec( param.get('jd')[k,:]) 
 	detadt = np.vstack( (yp, ypp, yppp));
-	return util.permute_rows( detadt);
+	return util.permute_eta_rows( detadt);
 
 def get_eta( x,t):
 	# tracking output dynamics
@@ -115,7 +135,7 @@ def get_eta( x,t):
 		- util.list_to_vec( param.get('ad')[k,:])
 
 	eta = np.vstack( (y, yp, ypp));
-	eta = util.permute_rows( eta);
+	eta = util.permute_eta_rows( eta);
 
 	return eta
 
@@ -294,12 +314,11 @@ def get_dfdx(x,t):
 
 	row1 = np.hstack( (O_aa, I_a, O_ab, O_ab))
 	row2 = np.hstack( (dvdotadpa, dvdotadva, dvdotadpb, dvdotadvb))
-	row3 = np.hstack( (O_ba, O_ba, I_b, O_bb))
+	row3 = np.hstack( (O_ba, O_ba, O_bb, I_b))
 	row4 = np.hstack( (O_ba, O_ba, O_bb, O_bb))
 
 	dfdx = np.vstack( (row1, row2, row3, row4))
-	dfdx = util.permute_cols(dfdx)
-	dfdx = util.permute_rows_2(dfdx)
-	# dfdx = util.permute_cols(np.transpose(dfdx))
+	dfdx = util.permute_x_cols(dfdx)
+	dfdx = util.permute_x_rows(dfdx)
 
 	return dfdx

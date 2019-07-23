@@ -158,7 +158,7 @@ def get_plot_lim(X,T):
 
 	return xmin, xmax, ymin, ymax
 
-def permute_rows( x):
+def permute_eta_rows( x):
 	perm_mat = np.zeros( (len(x), len(x)))
 	gamma = param.get('gamma') # relative degree
 
@@ -169,9 +169,8 @@ def permute_rows( x):
 			perm_mat[row_idx, col_idx] = 1
 			row_idx += 1
 	return np.matmul( perm_mat, x)
-	# return x
 
-def permute_rows_2( x):
+def permute_x_rows( x):
 
 	perm_mat = np.zeros( (param.get('n'), param.get('n')))
 	for i_a in range(param.get('na')):
@@ -191,11 +190,11 @@ def permute_rows_2( x):
 		for i_d in range(param.get('nd')):
 			perm_mat[ old_p_idx+i_d, new_p_idx+i_d] = 1
 			perm_mat[ old_v_idx+i_d, new_v_idx+i_d] = 1
-		
-	return np.matmul( perm_mat,x)
+	
+	return np.matmul( perm_mat, x)
 
 
-def permute_cols( x):
+def permute_x_cols( x):
 
 	perm_mat = np.zeros( (param.get('n'), param.get('n')))
 	for i_a in range(param.get('na')):
