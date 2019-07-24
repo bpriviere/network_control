@@ -11,7 +11,7 @@ param['T'] = np.reshape(T, (len(T),-1))
 param['nt'] = len(param.get('T'))
 
 # agents
-param['na'] = 5
+param['na'] = 2
 param['nb'] = 1
 param['ni'] = param.get('na') + param.get('nb')
 
@@ -29,8 +29,9 @@ param['gamma'] = 3
 
 # controller
 # [ 'empty', 'fdbk', 'clf', 'scp-clf']
-param['controllers'] = [ 'fdbk','clf', 'scp']
-param['mpc_horizon'] = 10 
+param['controllers'] = [ 'fdbk','clf','mpc']
+param['mpc_horizon'] = 30 # in timesteps
+param['mpc_update'] = 5 
 param['control_max'] = 1
 param['k_fdbk'] = 100
 
@@ -39,11 +40,11 @@ param['case_xd'] = 2
 
 # solver
 param['max_iters'] = 2000
-param['n_scp_iter'] = 1
+param['n_scp_iter'] = 5
 param['scp_tol'] = 0.1
 param['p_u'] = 0 
-param['p_v'] = 100
-param['tau_trust'] = 0.5
+param['p_v'] = 1000
+param['tau_trust'] = 0.1
 
 # init
 param['plim'] = 1 

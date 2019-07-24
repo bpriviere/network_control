@@ -8,13 +8,14 @@ from matplotlib.animation import FuncAnimation
 from matplotlib.backends.backend_pdf import PdfPages
 import os 
 
-def plot_cost( C, C_scp, title = 'Objective Value'):
+def plot_cost( C, title = 'Objective Value'):
 	fig, ax = plt.subplots()
-	plt.plot( C_scp, label = 'SCP Iterations', color = 'black')
+
+	prop_cycle = plt.rcParams['axes.prop_cycle']
+	colors = prop_cycle.by_key()['color']
 	
-	ax.axhline( C[0],  label = 'fdbk', color = 'red')
-	ax.axhline( C[1],  label = 'clf', color = 'green')
-	ax.axhline( C[2],  label = 'scp', color = 'black')
+	for k,u in enumerate(param.get('controllers')):
+		ax.axhline( C[k], label = u, c = colors[k])		
 
 	plt.title(title)
 	plt.xlabel('Iteration')

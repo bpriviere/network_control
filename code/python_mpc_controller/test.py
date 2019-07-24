@@ -102,123 +102,6 @@ def fn2():
 	plotter.save_figs()
 	subprocess.call(["xdg-open", pdf_path])
 
-def fn1():
-
-
-	pdf_path = os.path.join( os.getcwd(), param.get('fn_plots'))
-
-	# remove if exists 
-	if os.path.exists(pdf_path):
-		os.remove(pdf_path)
-
-	np.random.seed(88)
-
-	util.get_x0()
-	util.get_xd()
-
-	# baseline trajectory
-	bX = []
-	bU = np.zeros(( len(param.get('T')),param.get('m') ))
-
-	# true perturbed trajectory
-	X = []
-	Xdot = []
-	V = []
-	Vdot = []	
-
-	# linearized perturbed trajectory
-	tX = []
-	tXdot = []
-	tV = []
-	tVdot = []
-
-	# collect baseline 
-	x_curr = param.get('x0')
-	for k,t in enumerate(param.get('T')):
-		u_curr = util.list_to_vec(bU[ k,:])
-		x_next = x_curr + param.get('dt')*dynamics.get_dxdt( x_curr, u_curr, t)
-
-		bX.append(x_curr)
-		x_curr = x_next
-	bX = np.squeeze(np.asarray( bX))
-
-
-	# now run two trajectories and look at divergence
-	eps_x0 = 0.0*np.random.uniform( size = ( param.get('n') , 1))
-	eps_u = 0.*np.random.uniform( size = ( param.get('nt') , param.get('m')))
-	x_curr = param.get('x0') + eps_x0
-	tx_curr = param.get('x0') + eps_x0
-	scpU = bU + eps_u 
-	for k,t in enumerate(param.get('T')):
-
-		# current control
-		u_curr = np.reshape( np.transpose( scpU[ k,:]), (param.get('m'),1)) 
-
-		# base
-		ub = util.list_to_vec(bU[ k,:])
-		xb = util.list_to_vec(bX[ k,:])
-
-		# true
-		dxdt = dynamics.get_dxdt( x_curr, u_curr, t)
-		x_next = x_curr + dxdt * param.get('dt') 
-		v = dynamics.get_V( x_curr, t)
-		vdot = dynamics.get_LfV( x_curr, t) + np.matmul( dynamics.get_LgV( x_curr, t), u_curr) 
-
-		# approximate 
-		F_k, B_k, d_k = dynamics.get_linear_dynamics( xb, \
-			ub, t)
-		R_k, w_k = dynamics.get_linear_lyapunov( xb, ub, t)
-
-		tx_next = np.matmul( F_k, tx_curr) + \
-			np.matmul( B_k, u_curr) + d_k
-		tv = np.matmul(R_k, tx_curr) + w_k
-
-		X.append(x_curr)
-		Xdot.append(dxdt)
-		V.append(v)
-		Vdot.append( vdot)
-
-		tX.append(tx_curr)
-		tV.append(tv)
-
-		x_curr = x_next
-		tx_curr = tx_next
-
-		print('Timestep:' + str(k) + '/' + str(len(param.get('T'))))
-
-	X = np.squeeze(np.asarray(X))
-	V = np.squeeze(np.asarray(V))
-	
-	tX = np.squeeze(np.asarray(tX))
-	tV = np.asarray(tV) 
-	tXdot = np.gradient(tX, param.get('dt'), axis = 0)
-	tVdot = np.gradient(tV, param.get('dt'), axis = 0)
-
-	import matplotlib.pyplot as plt 
-
-	fig = plt.figure()
-
-	for i in range(np.shape(X)[1]):
-		plt.plot( param.get('T'), np.abs( X[:,i] - tX[:,i]), label = 'index' + str(i))
-		plt.legend()
-	plt.yscale('log')
-	plt.title( 'State Error')
-
-	fig = plt.figure()
-	plt.plot( param.get('T'), np.abs( V - tV) , label = 'tV')
-	plt.plot( param.get('T'), np.abs( tlV - V), label = 'tlV')
-	plt.title('Lyapunov')
-	plt.legend()
-	plt.yscale('log')
-
-
-	plotter.plot_SS( bX, param.get('T'), title = 'Unperturbed State Space')
-	plotter.plot_SS( X, param.get('T'), title = 'Nonlinear Perturbed State Space')
-	plotter.plot_SS( tX, param.get('T'), title = 'Linear Perturbed State Space')		
-
-	plotter.save_figs()
-	subprocess.call(["xdg-open", pdf_path])
-
 def fn3():
 
 	pdf_path = os.path.join( os.getcwd(), param.get('fn_plots'))
@@ -370,9 +253,45 @@ def fn3():
 	plotter.save_figs()
 	subprocess.call(["xdg-open", pdf_path])
 
+def fn4():
+
+	pdf_path = os.path.join( os.getcwd(), param.get('fn_plots'))
+
+	# remove if exists 
+	if os.path.exists(pdf_path):
+		os.remove(pdf_path)
+
+	np.random.seed(88)
+
+	util.get_x0()
+	util.get_xd()
+
+	X = []
+	U = []
+
+	param['controller'] = 'mpc'
+	x_curr = param.get('x0')
+	for t in param.get('T'):
+		try:
+			u_curr = controller.get_u( x_curr, t)
+			x_next = x_curr + dynamics.get_dxdt( x_curr, u_curr, t) * param.get('dt')
+
+			x_curr = x_next
+			print('t/T = ' + str(t) + '/' + str( param.get('T')[-1]))
+		except:
+			pass
+
+		X.append(x_curr)
+		U.append(u_curr)
+
+	X = np.squeeze(np.asarray(X))
+	plotter.plot_SS( X, param.get('T'))
+	plotter.save_figs()
+	subprocess.call(["xdg-open", pdf_path])
 
 
-fn3()
+
+fn4()
 
 
 

@@ -90,26 +90,6 @@ def get_detadx(x,t):
 
 	return detadx
 
-def calc_cost( U):
-
-	lambda_v = util.get_stabilization_rate()
-	cost = 0
-	x_curr = param.get('x0')
-	for k,t in enumerate( param.get('T')):
-		if k < param.get('nt')-1:
-			u_curr = np.reshape( U[k,:], (param.get('m'),1))
-			x_next = x_curr + get_dxdt( x_curr, u_curr, t) * param.get('dt')
-
-			v_curr = get_V(x_curr, t)
-			v_next = get_V(x_next, param.get('T')[k+1])
-			delta_v = np.max((0, \
-				(v_next - v_curr)/param.get('dt') + lambda_v * v_curr))
-
-			cost += np.linalg.norm( u_curr) + param.get('p_v')*delta_v
-			x_curr = x_next
-
-	return cost
-
 def get_detadt( x,t):
 	k = np.where(param.get('T') == t)[0][0]
 	yp   = - util.list_to_vec( param.get('vd')[k,:])
