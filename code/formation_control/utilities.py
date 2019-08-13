@@ -5,86 +5,36 @@ from autograd.extend import primitive, defvjp  # defvjp is now a function
 # from autograd import primitive
 from scipy.linalg import block_diag as block_diag
 
-@primitive
+
 def get_A(x):
-	# Adjacency Matrix
-
-	A = np.zeros((param.get('ni'), param.get('ni')))
-	for i in range(param.get('ni')):
-		p_i = np.dot(get_p_i(i), x)
-		for j in range(param.get('ni')):
-			p_j = np.dot(get_p_i(j), x)
-			dist = np.linalg.norm( p_i - p_j)
-			if dist < param.get('R_comm'):
-				A[i,j] = np.exp( -param.get('lambda_a') * dist)
 	
-	# A = np.ones((param.get('ni'), param.get('ni')))
+	# pose
+	P = np.dot(get_p(),x)
+	
+	X = np.dot( 
+		np.ones((param.get('ni'),1)),
+		to_vec(P[np.mod(np.arange(0,len(P)),2)==False]).T)
+	Y = np.dot( 
+		np.ones((param.get('ni'),1)),
+		to_vec(P[np.mod(np.arange(0,len(P)),2)==True]).T)
+	
+	D = np.sqrt( 
+		np.power( X - X.T + 1e-9,2) + 
+		np.power( Y - Y.T + 1e-9,2))
 
-	for i in range(np.shape(A)[0]):
-		A[i,:] = A[i,:] / sum(A[i,:])
+	# print(D)
+	
+	A = np.exp( -param.get('lambda_a') * D)
+
+	A = A / np.linalg.norm(A, ord=2, axis=1)
+
 	return A
 
-def get_A_vjp(ans, x):
-	
-	def grad_A(g):
 
-		grad_A = np.zeros( (param.get('ni'), param.get('ni'), param.get('n')))
-		for i in range(param.get('ni')):
-			p_i = np.dot(get_p_i(i), x)
-			p_i_idx = get_p_i_idx(i)
-			for j in range(param.get('ni')):
-				if j != i:
-					p_j = np.dot(get_p_i(j), x)
-					p_j_idx = get_p_i_idx(j)
-					dist = np.linalg.norm( p_i - p_j)
-					if dist < param.get('R_comm'):
-						C = np.exp( -param.get('lambda_a')*dist)/dist
-						C = C*(p_i - p_j)
-						grad_A[i,j,p_i_idx] = C
-						grad_A[i,j,p_j_idx] = -C
-		
-		return np.tensordot( g, grad_A)
-		
-
-	return grad_A
-
-@primitive
 def get_A_a(x):
 
-	A = np.ones((param.get('na'), param.get('na')))
-	for i in range(param.get('na')):
-		p_i = np.dot(get_p_i(i), x)
-		for j in range(param.get('na')):
-			p_j = np.dot(get_p_i(j), x)
-			dist = np.linalg.norm( p_i - p_j)
-			if dist < param.get('R_comm'):
-				A[i,j] = np.exp( -param.get('lambda_a') * dist)
-
-	for i in range(np.shape(A)[0]):
-		A[i,:] = A[i,:] / sum(A[i,:])
+	A = get_A(x)[0:param.get('na'),0:param.get('na')]
 	return A
-
-def get_A_a_vjp(ans, x):
-	
-	def grad_A_a(g):
-
-		grad_A_a = np.zeros( (param.get('na'), param.get('na'), param.get('n')))
-		for i in range(param.get('na')):
-			p_i = np.dot(get_p_i(i), x)
-			p_i_idx = get_p_i_idx(i)
-			for j in range(param.get('na')):
-				p_j = np.dot(get_p_i(j), x)
-				p_j_idx = get_p_i_idx(j)
-				dist = np.linalg.norm( p_i - p_j)
-				if dist < param.get('R_comm'):
-					C = np.exp( -param.get('lambda_a')*dist)/dist*np.transpose(p_i - p_j)
-					grad_A[i,j,p_i_idx] = C
-					grad_A[i,j,p_j_idx] = -C
-		
-		return np.tensordot( g, grad_A_a)
-
-	return grad_A_a
-
 
 def get_L(x):
 	# Laplacian Matrix
@@ -151,7 +101,7 @@ def get_v_b():
 	# get matrix to extract stacked velocities of all control agents
 	pi = np.zeros( (param.get('nb'), 2*param.get('ni')))
 	for i in range(param.get('nb')):
-		pi[i,2*(i+param.get('ni')) + 1] = 1
+		pi[i,2*(i + param.get('na')) + 1] = 1
 	return np.kron( pi, np.eye(param.get('nd')))
 
 def get_v_i(i):
@@ -211,7 +161,6 @@ def get_T():
 			np.eye(param.get('nd')))
 		T = block_diag(T, t)
 		
-
 	for i in range(param.get('nb')):
 		T = block_diag(T, np.zeros((2*param.get('nd'),2*param.get('nd'))))
 
@@ -248,15 +197,23 @@ def get_xd():
 
 		param['ni_d'] = 3
 
+	elif param.get('case_xd') is "single_node":
+		param['phase_d'] = 0
+		param['radius_d'] = 1
+		param['ni_d'] = 1
+
 	if param.get('na') is not param.get('ni_d'):
 		print('Error: Number of Agents Mismatch')
 		exit()
 
-	xd = np.zeros( param.get('n'))
-	for i in range( param.get('na')):
-		xd[get_p_i_idx(i)] = param.get('radius_d')[i] * np.asarray( [
-			np.cos( param.get('phase_d')[i]), np.sin( param.get('phase_d')[i]) ])
-	param['xd'] = xd
+	if param.get('ni_d') > 1:
+		xd = np.zeros( param.get('n'))
+		for i in range( param.get('na')):
+			xd[get_p_i_idx(i)] = param.get('radius_d')[i] * np.asarray( [
+				np.cos( param.get('phase_d')[i]), np.sin( param.get('phase_d')[i]) ])
+		param['xd'] = xd
+	else:
+		param['xd'] = np.zeros(param.get('n')) 
 
 
 def get_x0():
@@ -294,3 +251,68 @@ def get_min_dist( x):
 				if dist < min_dist:
 					min_dist = dist
 	return min_dist
+
+
+
+# @primitive
+# def get_A(x):
+# 	# Adjacency Matrix
+
+# 	A = np.zeros((param.get('ni'), param.get('ni')))
+# 	for i in range(param.get('ni')):
+# 		p_i = np.dot(get_p_i(i), x)
+# 		for j in range(param.get('ni')):
+# 			p_j = np.dot(get_p_i(j), x)
+# 			dist = np.linalg.norm( p_i - p_j)
+# 			# if dist < param.get('R_comm'):
+# 			A[i,j] = np.exp( -param.get('lambda_a') * dist)
+	
+# 	# A = np.ones((param.get('ni'), param.get('ni')))
+# 	return A
+
+# def get_A_vjp(ans, x):
+
+# 	try:
+# 		x = x._value
+# 	except:		
+# 		pass
+
+# 	def grad_A(g):
+
+# 		grad_A = np.zeros( (param.get('ni'), param.get('ni'), param.get('n')))
+# 		for i in range(param.get('ni')):
+# 			p_i = np.dot(get_p_i(i), x)
+# 			p_i_idx = get_p_i_idx(i)
+# 			for j in range(param.get('ni')):
+# 				if j != i:
+# 					p_j = np.dot(get_p_i(j), x)
+# 					p_j_idx = get_p_i_idx(j)
+# 					dist = np.linalg.norm( p_i - p_j)
+# 					# if dist < param.get('R_comm'):
+# 					C = np.squeeze(
+# 						np.exp( -param.get('lambda_a')*dist)*
+# 						-param.get('lambda_a')/dist*
+# 						(p_i - p_j))
+
+# 					grad_A[i,j,p_i_idx] = C
+# 					grad_A[i,j,p_j_idx] = -C
+
+# 		return np.tensordot( g, grad_A)
+
+# 	return grad_A
+
+# def my_check_grad( func, dfunc, x):
+
+# 	fx = func(x)
+# 	eps = 1e-11
+# 	err = np.zeros((*np.shape(fx)[:], len(x)))
+# 	for i in range( len(x)):
+# 		print('x_idx: ' + str(i))
+# 		x1 = x 
+# 		x1[i] = x[i] + eps
+# 		fx1 = func(x1)
+# 		df = (fx1 - fx) / eps
+# 		err[:,:,i] = df - dfunc(x)[:,:,i]
+	
+# 	print(err)
+# 	print(err.shape)

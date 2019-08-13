@@ -1,8 +1,9 @@
 
 
-import numpy as np 
+import autograd.numpy as np 
 import matplotlib.pyplot as plt 
 import utilities as util
+import dynamics
 from param import param
 from matplotlib.animation import FuncAnimation
 from matplotlib.backends.backend_pdf import PdfPages
@@ -21,6 +22,130 @@ def plot_cost( C, title = 'Objective Value'):
 	plt.xlabel('Iteration')
 	plt.ylabel('Objective')
 	plt.legend()
+
+def plot_cost_iterations( C, title = 'Iteration Cost'):
+	fig, ax = plt.subplots()
+	ax.plot( C, '-s')
+	plt.title(title)
+
+def debug_scp_iteration_plot( tx_next, u_next, xbar, ubar, x0, T, i_iter):
+
+	unl = u_next
+	x_curr = x0
+	
+	Xnl = []
+	Vnl_nlx = []
+	Vnl_lx = []
+	tV_nlx = []
+	tV_lx = []
+
+	for k,t in enumerate(T):
+		x_next = x_curr + dynamics.get_dxdt( x_curr, unl[:,k], t) * param.get('dt')
+		R_k, w_k = dynamics.get_linear_lyapunov( xbar[:,k], ubar[:,k], t)
+		Vnl_nlx.append( dynamics.get_V( x_curr, t))
+		Vnl_lx.append( dynamics.get_V( tx_next[:,k],t))
+		tV_nlx.append( np.matmul( R_k, x_curr) + w_k )
+		tV_lx.append( np.matmul( R_k, tx_next[:,k]) + w_k)		
+		Xnl.append( x_curr)
+		x_curr = x_next
+
+	Xnl = np.asarray(Xnl)
+	Vnl_nlx = np.asarray(Vnl_nlx)
+	Vnl_lx = np.asarray(Vnl_lx)
+	tV_nlx = np.asarray(tV_nlx)
+	tV_lx = np.asarray(tV_lx)
+
+	plot_scp_iteration_state( Xnl, np.transpose(tx_next,(1,0,2)), \
+		np.transpose(xbar,(1,0,2)), T, title = str(param.get('controller')) + ' State' + \
+		'\nIteration: ' + str(i_iter) + '\nTime: ' + str(T[0]))
+
+	plot_scp_iteration_lyapunov( np.squeeze(Vnl_nlx), np.squeeze(Vnl_lx), np.squeeze( tV_nlx), \
+		np.squeeze( tV_lx), T, title = str(param.get('controller')) + ' Lyapunov' + \
+		'\nIteration: ' + str(i_iter) + '\nTime: ' + str(T[0]))
+
+def plot_scp_iteration_lyapunov( Vnl_nlx, Vnl_lx, tV_nlx, tV_lx, T, title = None):
+	fig, ax = plt.subplots()
+
+	ax.plot( T, Vnl_nlx, label = 'NLV NLX', color = 'b')
+	ax.plot( T, Vnl_lx, label = 'NLV LX', color = 'r')
+	ax.plot( T, tV_nlx, label = 'LV NLX', color = 'c')
+	ax.plot( T, tV_lx, label = 'LV LX', color = 'g')
+
+	plt.legend()
+	plt.title(title)
+
+
+def plot_scp_iteration_state( Xnl, tX, tX_prev, T, title = None):
+	fig, ax = plt.subplots() 
+	plt.axis('equal')
+
+	color_na_nl = 'b'
+	color_nb_nl = 'g'
+
+	color_na_txt = 'r'
+	color_nb_txt = 'c'
+
+	color_na_txtm1 = 'm'
+	color_nb_txtm1 = 'y'
+
+	for i in range(param.get('ni')):
+
+		P_i = np.squeeze(np.dot( \
+			util.get_p_i(i), Xnl)).transpose()
+
+		if i < param.get('na'):
+			color = color_na_nl
+		else:
+			color = color_nb_nl
+		# plot trajectory
+		ax.plot( P_i[:,0], P_i[:,1], color = color)
+		ax.scatter( P_i[0,0], P_i[0,1], color = color, 
+			marker = param.get('start_marker'))
+		ax.scatter( P_i[-1,0], P_i[-1,1], color = color, 
+			marker = param.get('stop_marker'))
+	ax.plot( np.nan, np.nan, color = color_na_nl, label = 'Nonlinear X Free')
+	ax.plot( np.nan, np.nan, color = color_nb_nl, label = 'Nonlinear X Control')		
+
+	for i in range(param.get('ni')):
+		
+		P_i = np.squeeze(np.dot( \
+			util.get_p_i(i), tX)).transpose()
+
+		if i < param.get('na'):
+			color = color_na_txt
+		else:
+			color = color_nb_txt
+		# plot trajectory
+		ax.plot( P_i[:,0], P_i[:,1], color = color)
+		ax.scatter( P_i[0,0], P_i[0,1], color = color, 
+			marker = param.get('start_marker'))
+		ax.scatter( P_i[-1,0], P_i[-1,1], color = color, 
+			marker = param.get('stop_marker'))
+	ax.plot( np.nan, np.nan, color = color_na_txt, label = 'Linear X Free')
+	ax.plot( np.nan, np.nan, color = color_nb_txt, label = 'Linear X Control')		
+
+	for i in range(param.get('ni')):
+
+		P_i = np.squeeze(np.dot( \
+			util.get_p_i(i), tX_prev)).transpose()
+
+		if i < param.get('na'):
+			color = color_na_txtm1
+		else:
+			color = color_nb_txtm1
+		# plot trajectory
+		ax.plot( P_i[:,0], P_i[:,1], color = color)		
+		ax.scatter( P_i[0,0], P_i[0,1], color = color, 
+			marker = param.get('start_marker'))
+		ax.scatter( P_i[-1,0], P_i[-1,1], color = color, 
+			marker = param.get('stop_marker'))
+	ax.plot( np.nan, np.nan, color = color_na_txtm1, label = 'Prev X Free')
+	ax.plot( np.nan, np.nan, color = color_nb_txtm1, label = 'Prev X Control')
+
+
+	plt.legend()
+	plt.title( title)
+
 
 def plot_V(V,T,title = 'Lyapunov Convergence'):
 	fig, ax = plt.subplots()
@@ -78,7 +203,9 @@ def plot_SS(X,T, title = 'State Space'):
 
 	# plot agents
 	for i in range(param.get('ni')):
-		P_i = util.get_P(X,i)
+		P_i = np.dot( \
+			util.get_p_i(i), np.transpose(X)).transpose()
+		
 		if i < param.get('na'):
 			color = param.get('FreeAgentColor')
 		else:

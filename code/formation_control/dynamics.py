@@ -10,15 +10,14 @@ def compute_jacobians():
 	param['partial_f_x'] = jacobian(get_f)
 
 def get_dxdt(x,u,t):
-
+	# full dynamics
 	f = get_f(x)
 	g = get_g(x)
 	return f + np.dot(g,u)
 
 def get_f( x):
-
 	# drift dynamics
-
+	
 	# free agents
 	for i in range(param.get('na')):
 		v_i = util.to_vec(np.dot( util.get_v_i(i), x))

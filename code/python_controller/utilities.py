@@ -1,74 +1,81 @@
 
 from param import param
 from scipy.linalg import solve_lyapunov, block_diag
-import numpy as np 
-
+import autograd.numpy as np 
 
 def get_min_dist( x):
 	min_dist = np.inf 
 	for i in range(param.get('ni')):
-		pose_i = get_p(x,i)
+		pose_i = np.dot(get_p_i(i), x)
 		for j in range(param.get('ni')):
 			if i is not j:
-				pose_j = get_p(x,j)
+				pose_j = np.dot(get_p_i(j), x)
 				dist = np.linalg.norm( pose_i - pose_j)
 				if dist < min_dist:
 					min_dist = dist
 	return min_dist
 
 def get_A( x):
-	# TODO
+	
 	A = np.ones([param.get('ni'), param.get('ni')])
+	# A = np.zeros([param.get('ni'), param.get('ni')])
+	# for i in range(param.get('ni')):
+	# 	p_i = np.dot( get_p_i(i), x)
+	# 	for j in range(param.get('ni')):
+	# 		p_j = np.dot( get_p_i(j), x)
+	# 		dist = np.linalg.norm( p_i - p_j)
+	# 		if dist < param.get('R_comm'):
+
+	# 			print('Adj')
+	# 			print(np.shape(x))
+	# 			print(np.shape(p_i))
+	# 			print(np.shape(p_j))
+	# 			print(np.shape(dist))
+	# 			print(param.get('lambda_a'))
+	# 			A[i,j] = np.exp( -param.get('lambda_a')*dist)
+	# print(A)
 	return A
 
-def get_v( x, i):
-	# get velocity of agent i
-	state_idx = 2*param.get('nd')*i + param.get('nd')
-	return x[state_idx:state_idx+param.get('nd')]
-
-def get_p( x, i):
-	# get position of agent i
-	state_idx = 2*param.get('nd')*i
-	return x[state_idx:state_idx+param.get('nd')]
-
-def get_p_a( x):
-	# get stacked positions of all free agents
-	p_a = []
+def get_p_a():
+	# get matrix to extract stacked positions of all free agents
+	pi = np.zeros( (param.get('na'), 2*param.get('ni') ))
 	for i in range(param.get('na')):
-		p_a.append( get_p( x, i))
-	return list_to_vec(np.asarray(p_a).flatten())
+		pi[i,2*param.get('nd')*i] = 1
+	return np.kron( pi, np.eye(param.get('nd')))
 
-def get_v_a( x):
-	# get stacked velocity of all free agents
-	v_a = []
+def get_v_a():
+	# get matrix to extract stacked velocities of all free agents
+	pi = np.zeros( (param.get('na'), 2*param.get('ni') ))
 	for i in range(param.get('na')):
-		v_a.append( get_v( x, i))
-	return list_to_vec(np.asarray(v_a).flatten())
+		pi[i,2*i + 1] = 1
+	return np.kron( pi, np.eye(param.get('nd')))
 
-def get_v_b( x):
-	v_b = []
+def get_v_b():
+	# get matrix to extract stacked velocities of all control agents
+	pi = np.zeros( (param.get('nb'), 2*param.get('ni')))
 	for i in range(param.get('nb')):
-		v_b.append( get_v( x, i + param.get('na')))
-	return list_to_vec(np.asarray(v_b).flatten())
+		pi[i,2*(i+param.get('ni')) + 1] = 1
+	return np.kron( pi, np.eye(param.get('nd')))
 
-def get_P( X, i):
-	# get position of agent i for all time
-	state_idx = 2*param.get('nd')*i
-	return X[:,state_idx:state_idx+param.get('nd')]
+def get_v_i(i):
+	pi = np.zeros( (1, 2*param.get('ni')))
+	pi[0, 2*i + 1] = 1
+	return np.kron( pi, np.eye(param.get('nd')))
+
+def get_p_i(i):
+	pi = np.zeros( (1, 2*param.get('ni')))
+	pi[0, 2*i] = 1
+	return np.kron( pi, np.eye(param.get('nd')))
 
 def get_P_bar( X,T):
-	# get centroid position of free agents for all time 
-	P_bar = []
-	my_1 = get_my_1()
-	for i_t in range(len(T)):
-		p_a = get_p_a( X[i_t])
-		P_bar.append( np.matmul( np.transpose(my_1), p_a))
-	return np.asarray(P_bar)
 
-def get_V( X, i):
-	# get velocity of agent i for all time 
-	state_idx = 2*param.get('nd')*i + param.get('nd')
-	return X[:,state_idx:state_idx+param.get('nd')]
+	my_1 = get_my_1()
+	P_bar = []
+	for k,t in enumerate(T):
+		P_bar.append( \
+			np.dot( np.transpose( my_1), \
+			np.dot( get_p_a(), X[k,:])))
+	return np.asarray(P_bar)
 
 def get_lyapunov_metric():
 
@@ -99,12 +106,6 @@ def get_stabilization_rate():
 def get_my_1():
 	return np.kron(np.ones((param.get('na'),1)),np.eye(param.get('nd')))/ \
 		param.get('na')
-
-def list_to_vec(x):
-	return np.reshape(x, (len(x),-1))
-
-def list_of_list_to_vec(list_of_list):
-	return list_to_vec( [x for sublist in list_of_list for x in sublist])
 
 def get_plot_lim(X,T):
 	xmin = np.inf
@@ -158,8 +159,9 @@ def get_plot_lim(X,T):
 
 	return xmin, xmax, ymin, ymax
 
-def permute_eta_rows( x):
-	perm_mat = np.zeros( (len(x), len(x)))
+def permute_eta_rows():
+	perm_mat = np.zeros( (param.get('nd')*param.get('gamma'), \
+		param.get('nd')*param.get('gamma')))
 	gamma = param.get('gamma') # relative degree
 
 	for dim_idx in range( param.get('nd')):
@@ -168,7 +170,7 @@ def permute_eta_rows( x):
 			col_idx = gamma_idx* param.get('nd') + dim_idx
 			perm_mat[row_idx, col_idx] = 1
 			row_idx += 1
-	return np.matmul( perm_mat, x)
+	return perm_mat
 
 def permute_x_rows( x):
 
@@ -191,10 +193,10 @@ def permute_x_rows( x):
 			perm_mat[ old_p_idx+i_d, new_p_idx+i_d] = 1
 			perm_mat[ old_v_idx+i_d, new_v_idx+i_d] = 1
 	
-	return np.matmul( perm_mat, x)
+	return np.dot( perm_mat, x)
 
 
-def permute_x_cols( x):
+def permute_x_cols():
 
 	perm_mat = np.zeros( (param.get('n'), param.get('n')))
 	for i_a in range(param.get('na')):
@@ -215,44 +217,81 @@ def permute_x_cols( x):
 			perm_mat[ old_p_idx+i_d, new_p_idx+i_d] = 1
 			perm_mat[ old_v_idx+i_d, new_v_idx+i_d] = 1
 		
-	return np.matmul( x, perm_mat)
+	return perm_mat
 
 def get_x0():
 
-	min_dist = np.inf
+	min_dist = -np.inf
 	count = 0 
-	while min_dist > param.get('min_dist'):
+	while min_dist < param.get('min_dist'):
 		
-		x0 = []
 		for i in range(param.get('ni')):
 			p_i = param.get('plim')*np.random.rand(param.get('nd'),1) \
 				- param.get('plim')/2.
 			v_i = param.get('vlim')*np.random.rand(param.get('nd'),1) \
 				- param.get('vlim')/2.
-			x0.append( np.vstack((p_i, v_i)))
+			try:
+				x0 = np.vstack((x0, p_i, v_i))
+			except:
+				x0 = np.vstack((p_i, v_i))
 
 		count += 1
-		min_dist = get_min_dist( list_of_list_to_vec(x0))
+		min_dist = get_min_dist( x0)
 
 		if count > 100:
 			print('Error: Incompatible Initial Conditions')
 			return 
 
-	param['x0'] = list_of_list_to_vec(x0)
+	param['x0'] = x0
 
 def get_xd():
 
-	param['pd'] = np.zeros((len(param.get('T')),2))
-	# point, x = y = 1 for all t
-	if param.get('case_xd') == 0:
-		param['pd'] = np.ones((len(param.get('T')),2))
-	elif param.get('case_xd') == 1:
-		param['pd'][:,0] = np.squeeze(param.get('T'))
-		param['pd'][:,1] = np.squeeze(param.get('T'))
-	elif param.get('case_xd') == 2:
-		param['pd'][:,0] = np.cos( 2*np.pi*np.squeeze(param.get('T'))/param.get('T')[-1])
-		param['pd'][:,1] = np.sin( 2*np.pi*np.squeeze(param.get('T'))/param.get('T')[-1])
+	pd = []
+	vd = []
+	ad = []
+	for t in param.get('T'):
+		pd.append( get_pd_t(t))
+		vd.append( get_vd_t(t))
+		ad.append( get_ad_t(t))
+	param['pd'] = np.asarray(pd)
+	param['vd'] = np.asarray(vd)
+	param['ad'] = np.asarray(ad)
 
-	param['vd'] = np.gradient(param.get('pd'), param.get('dt'), axis = 0)
-	param['ad'] = np.gradient(param.get('vd'), param.get('dt'), axis = 0)
-	param['jd'] = np.gradient(param.get('ad'), param.get('dt'), axis = 0)
+def get_pd_t(t):
+
+	if param.get('case_xd') == 0:
+		return np.ones((2,1))
+	elif param.get('case_xd') == 1:
+		return t*np.ones((2,1))
+	elif param.get('case_xd') == 2:
+		return np.array([ 
+				np.cos( 2*np.pi/param.get('tf')*t), 
+				np.sin( 2*np.pi/param.get('tf')*t)
+			])
+	return 
+
+def get_vd_t(t):
+
+	if param.get('case_xd') == 0:
+		return np.zeros((2,1))
+	elif param.get('case_xd') == 1:
+		return np.ones((2,1))
+	elif param.get('case_xd') == 2:
+		return (2*np.pi/param.get('tf'))*np.array( [
+				-np.sin( 2*np.pi/param.get('tf')*t),
+				 np.cos( 2*np.pi/param.get('tf')*t)
+			])
+	return 
+
+def get_ad_t(t):
+
+	if param.get('case_xd') == 0:
+		return np.zeros((2,1))
+	elif param.get('case_xd') == 1:
+		return np.zeros((2,1))
+	elif param.get('case_xd') == 2:
+		return np.power( 2*np.pi/param.get('tf'),2.)*np.array( [
+				-np.cos( 2*np.pi/param.get('tf')*t),
+				-np.sin( 2*np.pi/param.get('tf')*t)
+			])
+	return 

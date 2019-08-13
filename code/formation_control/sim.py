@@ -4,7 +4,6 @@ from param import param
 import dynamics
 import controller
 import autograd.numpy as np 
-from autograd.extend import primitive, defvjp 
 from autograd import primitive, jacobian
 import utilities as util
 import plotter
@@ -12,44 +11,32 @@ import os, timeit, subprocess
 
 def main():
 
-	np.random.seed(88)
+	# random seed
+	# np.random.seed(88)
 
-	# 
+	# init
 	util.get_x0()
 	util.get_xd()
 	dynamics.compute_jacobians()
-	defvjp(util.get_A_a, util.get_A_a_vjp)
-	defvjp(util.get_A, util.get_A_vjp)	
 
-	x_curr = param.get('x0')
-
-	Vs = util.augment(util.get_Vs_a(param.get('xd')))		
-	VsT_T_pi_a = np.dot( np.dot( np.dot( 
-		np.transpose(Vs), util.get_T_a()), util.get_pi_a()), util.get_pv_a() )
-	delta = np.dot( VsT_T_pi_a, param.get('xd'))
-	print(delta)
- 
-
+	# preallocate
 	X = np.zeros( (param.get('n'), param.get('nt')))
 	U = np.zeros( (param.get('m'), param.get('nt')))
 	D = np.zeros( (2*param.get('nd')*(param.get('na')-1), param.get('nt')))
+
+	# go sim 
+	x_curr = param.get('x0')
 	for k,t in enumerate( param.get('T')):
 
-		if param.get('controller') is 'mpc':
-			if np.mod( k, param.get('mpc_update')) == 0:
-				U_mpc = controller.get_u( x_curr, t)
-			try:
-				u_curr = util.to_vec(U_mpc[:,np.mod( k, param.get('mpc_update'))])
-			except:
-				u_curr = np.zeros( (param.get('m'),1))
-		else:
-			u_curr = controller.get_u( x_curr, t)
+		if np.mod( k, param.get('mpc_update')) == 0:
+			U_mpc = controller.get_u( x_curr, t)
 
+		u_curr = util.to_vec(U_mpc[:,np.mod( k, param.get('mpc_update'))])
 		x_next = x_curr + dynamics.get_dxdt( x_curr, u_curr, t) * param.get('dt')
 		
-		Vs = util.augment(util.get_Vs_a(param.get('xd')))		
+		Vs_a = util.augment(util.get_Vs_a(param.get('xd')))		
 		VsT_T_pi_a = np.dot( np.dot( np.dot( 
-			np.transpose(Vs), util.get_T_a()), util.get_pi_a()), util.get_pv_a() )
+			np.transpose(Vs_a), util.get_T_a()), util.get_pi_a()), util.get_pv_a() )
 		delta = np.dot( VsT_T_pi_a, x_curr)
 
 		X[:,k] = np.squeeze(x_curr)
@@ -70,12 +57,10 @@ if __name__ == '__main__':
 	if os.path.exists(pdf_path):
 		os.remove(pdf_path)
 	
-	start = timeit.default_timer()	
 	main()
-	stop = timeit.default_timer()
-	print('Total Time: ', stop - start)
 
-	subprocess.call(["xdg-open", pdf_path])
+	if os.path.exists(pdf_path):
+		subprocess.call(["xdg-open", pdf_path])
 
 
 

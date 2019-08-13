@@ -5,22 +5,22 @@ function param = my_set_param()
     % see documentation for parameters
 
     % switch
-    param.ode45_on = 1;
-    param.gif_on = 1;
+    param.ode45_on = 0;
+    param.gif_on = 0;
     param.write_traj_file_on = 1;
     
     % discrete
-    param.dt = 0.05;
-    param.tf = 15;
+    param.dt = 0.01;
+    param.tf = 50;
     param.t = (param.dt:param.dt:param.tf)';
     param.nt = length(param.t);
     param.polyfit_dt = 1; 
     
     % analysis
     param.Nd = 2;
-    param.Na = 6;
+    param.Na = 2;
     param.Nb = 1;
-    param.R_comm = 1.;
+    param.R_comm = 100.;
     param.R_des  = 0.8; 
     param.lambda_h = 1;
     param.delta_h = 1;
@@ -31,10 +31,10 @@ function param = my_set_param()
     param.lambda_a = 0.1;
     param.kx = 2;
     param.kv = 2;
-    param.k_fdbk = 20; 
+    param.k_fdbk = 10; 
     param.gamma = 3;
     param.model = 'reynolds';
-    param.controller = 'fdbk';
+    param.controller = 'QP';
     param.min_dist_constraint = 0.3;
 
     % environment

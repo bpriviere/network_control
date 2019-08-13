@@ -5,6 +5,7 @@ import controller
 import plotter
 import utilities as util
 import subprocess, os, timeit 
+import dynamics_v2
 
 
 def fn2():
@@ -291,7 +292,38 @@ def fn4():
 
 
 
-fn4()
+
+
+def fn5():
+
+	util.get_x0()
+	util.get_xd()
+
+	x0 = param.get('x0')
+	t0 = param.get('T')[0]
+
+	# param['autograd_on'] = True	
+	# print( dynamics.get_detadx(x0,t0))
+	# param['autograd_on'] = False
+	# print( dynamics.get_detadx(x0,t0))
+
+	# param['autograd_on'] = True	
+	# print( dynamics.get_dgdx(x0))
+	# param['autograd_on'] = False
+	# print( dynamics.get_dgdx(x0))
+
+	
+	print( dynamics.get_dfdx(x0,t0))
+	print('\n')
+	print( dynamics_v2.get_dfdx(x0,t0))
+
+	print( np.shape( dynamics.get_dfdx(x0,t0)))
+	print( np.shape( dynamics_v2.get_dfdx(x0,t0)))
+
+	# print( dynamics.get_detadt(x0,t0))
+	# print( dynamics_v2.get_detadt(x0,t0))
+
+fn5()
 
 
 

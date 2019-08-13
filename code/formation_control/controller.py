@@ -16,7 +16,7 @@ def get_u(x,t):
 
 	elif param.get('controller') is 'mpc':
 		start_idx = np.where( param.get('T') == t)[0][0]
-		end_idx = np.min( (start_idx + param.get('mpc_horizon'), param.get('nt')-1))
+		end_idx = np.min( (start_idx + param.get('mpc_horizon'), param.get('nt')))
 		T = param.get('T')[start_idx:end_idx]
 		u = get_mpc_controller( x, T)
 
@@ -28,6 +28,8 @@ def get_mpc_controller(x0,T):
 	Vs = util.augment(util.get_Vs_a(param.get('xd')))
 	VsT_T_pi_a = np.dot( np.dot( np.dot( 
 		np.transpose(Vs), util.get_T_a()), util.get_pi_a()), util.get_pv_a() )
+	fig_ss, ax_ss = plotter.make_fig()
+	fig_u, ax_u = plotter.make_fig()
 
 	i_iter = 0 
 	cost_curr = np.inf
@@ -51,45 +53,51 @@ def get_mpc_controller(x0,T):
 				VsT_T_pi_a * x[:,k] == delta[:,k])
 
 			# control bounds
-			constraints.append( 
-				cp.abs( u[:,k]) <= param.get('control_max'))
+			# constraints.append( 
+			# 	cp.abs( u[:,k]) <= param.get('control_max'))
 
 			# trust region
-			# constraints.append( 
-			# 	cp.abs( x[:,k] - xbar[:,k]) <= param.get('tau_x'))			
-			# constraints.append( 
-			# 	cp.abs( u[:,k] - ubar[:,k]) <= param.get('tau_u'))
+			constraints.append( 
+				cp.abs( x[:,k] - xbar[:,k]) <= param.get('tau_x'))
+			constraints.append( 
+				cp.abs( u[:,k] - ubar[:,k]) <= param.get('tau_u'))
 
 			# dynamics
 			if k < len(T)-1:
-
 				F_k, B_k, d_k = dynamics.get_linear_dynamics( xbar[:,k], ubar[:,k], T[k])
 				constraints.append(
 					x[:,k+1] == F_k*x[:,k] + B_k*u[:,k] + d_k)
 
-		obj = cp.Minimize( 100*cp.sum_squares(delta) + cp.sum_squares(u))
+		obj = cp.Minimize( 
+			100*cp.sum_squares(delta) + 
+			cp.sum_squares( util.get_v_b() * x)
+			) 
+		
 		prob = cp.Problem( obj, constraints)
 
-		# prob.solve( verbose = True, solver = cp.GUROBI) 
-		prob.solve( verbose = True) 
+		prob.solve( verbose = True, solver = cp.GUROBI) 
+		# prob.solve( verbose = True) 
 
-		plotter.plot_VsTx( np.asarray(delta.value), T, title = 'VsTx')
-		fig, ax = plotter.make_fig()
 		plotter.plot_SS(xbar, T, 
-			title = 't: ' + str(T[0]) + '\n iter: ' + str(i_iter), fig = fig, ax = ax)
+			title = 'SS @ t: ' + str(T[0]), fig = fig_ss, ax = ax_ss)
 		plotter.plot_SS(np.asarray(x.value), T, 
-			title = 't: ' + str(T[0]) + '\n iter: ' + str(i_iter), fig = fig, ax = ax)
+			title = 'SS @ t: ' + str(T[0]), fig = fig_ss, ax = ax_ss)
+		plotter.plot(T, np.linalg.norm(np.asarray(u.value), axis = 0), 
+			title = 'U @ t: ' + str(T[0]), fig = fig_u, ax = ax_u)
+		
+		cost_next = prob.value
+		cost_diff = cost_next - cost_curr
 
 		ubar = np.asarray(u.value)
 		xbar = np.asarray(x.value)
 
-		cost_next = prob.value
-		cost_diff = cost_next - cost_curr
 		print('Current Cost:' + str(cost_next))
 		print('Cost Difference: ' + str(cost_diff))
 
 		i_iter += 1
 		cost_curr = cost_next
+
+	plotter.plot_VsTx( np.asarray(delta.value), T, title = 'VsTx')		
 
 	param['xbar'] = xbar
 	param['ubar'] = ubar
@@ -99,7 +107,6 @@ def get_mpc_controller(x0,T):
 
 def get_initial_trajectory(x0,T):
 
-
 	if param.get('ubar') is not None:
 		U = np.hstack((
 			param.get('ubar')[:,param.get('mpc_update'):],
@@ -107,16 +114,14 @@ def get_initial_trajectory(x0,T):
 
 	else:
 		U = np.zeros( (param.get('m'), param.get('nt')))
-	
+
 	# forward propagate
 	x_curr = x0
+	X = np.zeros( (param.get('n'), len(T)))
 	for k,t in enumerate(T):
-		u_curr = U[:,k]
+		u_curr = util.to_vec(U[:,k])
 		x_next = x_curr + dynamics.get_dxdt( x_curr, u_curr, T[k])*param.get('dt')
-		
-		try:
-			X = np.hstack( (X, x_curr))
-		except:
-			X = x_curr
+		X[:,k] = np.squeeze(x_curr)
+		x_curr = x_next
 
 	return X,U

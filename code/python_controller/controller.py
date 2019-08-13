@@ -1,6 +1,6 @@
 
 
-import numpy as np 
+import autograd.numpy as np 
 import dynamics
 import utilities as util 
 from param import param
@@ -22,20 +22,26 @@ def get_u(x,t):
 		u = get_clf_controller( x,t)
 
 	elif param.get('controller') is 'scp':
-		# u = get_mpc_scp_clf_controller( param.get('x0'), t)
-		u = get_scp_clf_controller()
+		start_idx = np.where( param.get('T') == t)[0][0]
+		end_idx = param.get('nt')-1
+		T = param.get('T')[start_idx:end_idx]
+		u = get_scp_clf_controller( x, T)
 
 	elif param.get('controller') is 'mpc':
-		u = get_mpc_scp_clf_controller( x, t)
+		start_idx = np.where( param.get('T') == t)[0][0]
+		end_idx = np.min( (start_idx + param.get('mpc_horizon'), param.get('nt')-1))
+		T = param.get('T')[start_idx:end_idx]
+		u = get_scp_clf_controller( x, T)
 
 	return u 
 
 def get_fdbk_controller( x,t):
-	k 			   = np.where(param.get('T') == t)[0][0]
-	my_1 		   = util.get_my_1()
-	eta 		   = dynamics.get_eta( x,t)
-	dvdota_dvb 	   = dynamics.get_dvdota_dvb(x,t)
-	xtilde_dot	   = dynamics.get_xtildedot( x,t)
+
+	k = np.where(param.get('T') == t)[0][0]
+	my_1 = util.get_my_1()
+	eta = dynamics.get_eta( x,t)
+	dvdota_dvb = dynamics.get_dvdota_dvb(x,t)
+	xtilde_dot = dynamics.get_xtildedot( x,t)
 	dvdota_dxtilde = dynamics.get_dvdota_dxtilde( x,t)
 
 	A = np.matmul( np.transpose( my_1), \
@@ -72,178 +78,115 @@ def get_clf_controller( x,t):
 	prob = cp.Problem(obj, constraints)
 	prob.solve(verbose = False, solver = cp.GUROBI)
 
-	u = util.list_to_vec([x for x in u.value])
+	u = np.array(u.value)
 	return u
 
-def get_scp_clf_controller():
+def get_scp_clf_controller( x0,T):
 
 	lambda_v = util.get_stabilization_rate()
-	T = param.get('T')
-	p_v = param.get('p_v')
-	control_max = param.get('control_max')
-	tau_trust = param.get('tau_trust')
-	dt = param.get('dt')
-	max_iters = param.get('max_iters')
+	xbar, ubar = get_scp_initial_trajectory(x0, T)
+	xbar = np.transpose( xbar, (1,0,2))
+	ubar = np.transpose( ubar, (1,0,2))
 
 	i_iter = 0
 	cost_curr = np.inf
 	cost_diff = np.inf
-	while i_iter < param.get('n_scp_iter') and cost_diff > param.get('scp_tol'):
+	tx_curr = xbar
+	state_diff = np.inf
+	C = []
+
+	while i_iter < param.get('n_scp_iter') and \
+		np.abs(cost_diff) > param.get('scp_cost_tol'):
+
+		if not (i_iter == 0):
+			if param.get('nl_correction_on'):
+				xbar = []
+				x_curr = x0
+				for k,t in enumerate(T):
+					u_curr = np.reshape( u_next[:,k], (param.get('m'),1))
+					x_next = x_curr + dynamics.get_dxdt( x_curr, u_curr, t) * param.get('dt')
+					xbar.append(x_curr)
+					x_curr = x_next
+				xbar = np.transpose( np.asarray(xbar), (1,0,2))
+				ubar = u_next
+			else:
+				ubar = u_next
+				xbar = tx_next
+
+
+		print('Iteration: ' + str(i_iter) + '/' + str(param.get('n_scp_iter')))
 	
-		print('SCP Iteration: ' + str(i_iter) + '/' + str(param.get('n_scp_iter')))
-
-		if i_iter == 0:
-			xbar, ubar = get_scp_initial_trajectory(param.get('x0'), param.get('T'))
-		else:
-			xbar = np.transpose( np.asarray([y for y in tx.value]), (0,2,1))
-			ubar = np.transpose( np.asarray([y for y in u.value]),  (0,2,1))
-
-		if np.mod( i_iter, 1) == 0:
-			plotter.plot_SS( xbar, param.get('T'), title = 'SCP Iteration: ' + str(i_iter))
-
-		u  = cp.Variable( len(T), param.get('m') )
-		tx = cp.Variable( len(T), param.get('n') )
-		tV = cp.Variable( len(T),1)
-		delta_v = cp.Variable( len(T)-1,1 )
+		u  = cp.Variable( param.get('m'), len(T) )
+		tx = cp.Variable( param.get('n'), len(T) )
+		tV = cp.Variable( len(T), 1)
+		delta_v = cp.Variable( len(T)-1, 1)
 
 		constraints = []
-		constraints.append( tx[0,:].T == param.get('x0'))
+		constraints.append( tx[:,0] == xbar[:,0])
 
 		for k in range( len(T)):
+
+			F_k, B_k, d_k = dynamics.get_linear_dynamics( xbar[:,k], ubar[:,k], T[k])
+			R_k, w_k = dynamics.get_linear_lyapunov( xbar[:,k], ubar[:,k], T[k])
+
+			constraints.append( 
+				tV[k] == R_k * tx[:,k] + w_k)
+			constraints.append( 
+				cp.abs( tx[:,k] - xbar[:,k]) <= param.get('tau_x') * np.power( 0.95, i_iter))
+			constraints.append( 
+				cp.abs( u[:,k] - ubar[:,k]) <= param.get('tau_u') * np.power( 0.95, i_iter))
+			constraints.append( 
+				cp.abs( u[:,k]) <= param.get('control_max'))
+		
 			if k < len(T)-1:
-				F_k, B_k, d_k = dynamics.get_linear_dynamics( xbar[k], ubar[k], T[k])
-
 				constraints.append( 
-					tV[k+1] <= (1-lambda_v*dt) * tV[k] + delta_v[k]*dt)
-
+					tV[k+1] <= (1-lambda_v*param.get('dt')) * tV[k] + delta_v[k]*param.get('dt'))
 				constraints.append(
-					tx[k+1,:].T == F_k * tx[k,:].T + B_k * u[k,:].T + d_k)
-
+					tx[:,k+1] == F_k * tx[:,k] + B_k * u[:,k] + d_k)
 				constraints.append(
 					delta_v[k] >= 0)
 
-			R_k, w_k = dynamics.get_linear_lyapunov( xbar[k], ubar[k], T[k])
 
-			constraints.append( 
-				tV[k] == R_k * tx[k,:].T + w_k)
-
-			constraints.append( 
-				cp.abs(tx[k,:].T-xbar[k]) <= tau_trust)
-
-			constraints.append( 
-				cp.abs(u[k,:]) <= control_max)
-
-		obj = cp.Minimize( p_v*sum(delta_v) + cp.sum_squares(u))
+		# obj = cp.Minimize( cp.sum_squares(u) + param.get('p_v')*sum(delta_v)) 
+		# obj = cp.Minimize( param.get('p_v')*sum(delta_v)) 
+		obj = cp.Minimize( sum(tV) + cp.sum_squares(u)) 
 		prob = cp.Problem( obj, constraints)
 
-		prob.solve(verbose = False, solver = cp.GUROBI,  max_iters = max_iters)
+		prob.solve(verbose = False, solver = cp.GUROBI, \
+			BarQCPConvTol = 1e-6, BarHomogeneous = True)
+		# prob.solve(verbose = False)
 
-		i_iter += 1
+		tx_next = np.asarray(tx.value).reshape(param.get('n'), len(T), -1)
+		u_next = np.asarray(u.value).reshape(param.get('m'), len(T), -1)
+		tV_next = np.asarray(tV.value).reshape(len(T), -1)
+
 		cost_next = prob.value
 		cost_diff = cost_next - cost_curr
+		state_diff = sum( np.linalg.norm( tx_next - tx_curr, axis = 1))
+
+		i_iter += 1
+		C.append( cost_curr)
 		cost_curr = cost_next
+		tx_curr = tx_next
+		print('Curr Cost - Prev Cost: ' + str(cost_diff))
+		print('State Change: ' + str(state_diff))
+		print('Timestep: ' + str(T[0]) + '/' + str(param.get('T')[-1]) + '\n')
 
-		print(prob.value)
-		print(cost_diff)
-
-	X = np.squeeze(np.asarray([y for y in tx.value]))
-	U = np.asarray([y for y in u.value])
-
-	# print(np.shape(U))
-	return U
-
-def get_mpc_scp_clf_controller( x0,t):
-	
-	lambda_v = util.get_stabilization_rate()
-	p_v = param.get('p_v')
-	control_max = param.get('control_max')
-	tau_trust = param.get('tau_trust')
-	dt = param.get('dt')
-	max_iters = param.get('max_iters')
-
-	start_idx = np.where( param.get('T') == t)[0][0]
-	end_idx = np.min( (start_idx + param.get('mpc_horizon'), param.get('nt')-1))
-	T = param.get('T')[start_idx:end_idx]
-
-	i_iter = 0
-	cost_curr = np.inf
-	cost_diff = np.inf
-	if len(T) > 1:
-		while i_iter < param.get('n_scp_iter') and np.abs(cost_diff) > param.get('scp_tol'):
-		
-			print('SCP Iteration: ' + str(i_iter) + '/' + str(param.get('n_scp_iter')))
-
-			if i_iter == 0:
-				xbar, ubar = get_scp_initial_trajectory(x0, T)
-			else:
-				xbar = np.transpose( np.asarray([y for y in tx.value]), (0,2,1))
-				ubar = np.transpose( np.asarray([y for y in u.value]),  (0,2,1))
-
-			# if np.mod( i_iter, 1) == 0:
-			# 	plotter.plot_SS( xbar, T, title = 'SCP Iteration: ' + str(i_iter))
-
-			u  = cp.Variable( len(T), param.get('m') )
-			tx = cp.Variable( len(T), param.get('n') )
-			tV = cp.Variable( len(T), 1)
-			delta_v = cp.Variable( len(T)-1, 1)
-
-			constraints = []
-			constraints.append( tx[0,:].T == x0)
-
-			for k in range( len(T)):
-				if k < len(T)-1:
-					F_k, B_k, d_k = dynamics.get_linear_dynamics( xbar[k], ubar[k], T[k])
-
-					constraints.append( 
-						tV[k+1] <= (1-lambda_v*dt) * tV[k] + delta_v[k]*dt)
-
-					constraints.append(
-						tx[k+1,:].T == F_k * tx[k,:].T + B_k * u[k,:].T + d_k)
-
-					constraints.append(
-						delta_v[k] >= 0)
-
-				R_k, w_k = dynamics.get_linear_lyapunov( xbar[k], ubar[k], T[k])
-
-				constraints.append( 
-					tV[k] == R_k * tx[k,:].T + w_k)
-
-				constraints.append( 
-					cp.abs(tx[k,:].T-xbar[k]) <= tau_trust)
-
-				constraints.append( 
-					cp.abs(u[k,:]) <= control_max)
-
-			obj = cp.Minimize( p_v*sum(delta_v) + cp.sum_squares(u))
-			prob = cp.Problem( obj, constraints)
-
-			prob.solve(verbose = True, solver = cp.GUROBI,  max_iters = 1000, BarQCPConvTol = 1e-6)
-			
-			i_iter += 1
-			cost_next = prob.value
-			cost_diff = cost_next - cost_curr
-			cost_curr = cost_next
-			
-			print('Objective: ' + str(prob.value))
-			print('Objective Change: ' + str(cost_diff))
-
-
-		U = np.transpose( np.asarray([y for y in u.value]), (0,2,1))
-	else:
-		U = np.zeros( (param.get('m'), len(T) ))
-	# print(np.shape(U))
+	plotter.debug_scp_iteration_plot( tx_next, u_next, xbar, ubar, x0, T, i_iter)
+	plotter.plot_cost_iterations(C)
+	U = np.transpose( ubar, (1,0,2))
 	return U
 
 
 def get_scp_initial_trajectory(x0, T):
-	# use feedback linearizing solution
+	# use clf solution
 
 	X = []
 	U = []
 	x_curr = x0
 
 	for t in T:
-		u_curr = get_fdbk_controller( x_curr, t) 
+		u_curr = get_clf_controller( x_curr, t) 
 		x_next = x_curr + dynamics.get_dxdt( x_curr, u_curr, t) * param.get('dt')
 
 		X.append(x_curr)
@@ -272,5 +215,4 @@ def calc_cost( U):
 
 			cost += np.linalg.norm( u_curr) + param.get('p_v')*delta_v
 			x_curr = x_next
-
 	return cost

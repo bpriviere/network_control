@@ -13,13 +13,15 @@ def main():
 
 	util.get_x0()
 	util.get_xd()
+	dynamics.compute_jacobians()
+
 	C = []
 	print('Sim...')
-	for u in param.get('controllers'):
+	for u_type in param.get('controllers'):
 
-		param['controller'] = u
+		param['controller'] = u_type
 
-		print('Controller: ' + str(u))
+		print('Controller: ' + str(u_type))
 		
 		X = []
 		U = []
@@ -29,12 +31,18 @@ def main():
 		abar = []
 		x_curr = param.get('x0')
 		count = 0 
-		for t in param.get('T'):
+		for k,t in enumerate(param.get('T')):
+
+			# try:
 			
 			if param.get('controller') is 'scp':
 				if count == 0:
 					U_scp = controller.get_u( x_curr, t)
-				u_curr = np.transpose(U_scp[count])
+				try:
+					u_curr = U_scp[count]
+				except:
+					u_curr = np.zeros((param.get('m'),1))
+
 			elif param.get('controller') is 'mpc':
 				if np.mod( count, param.get('mpc_update')) == 0:
 					count = 0
@@ -42,9 +50,13 @@ def main():
 				try:
 					u_curr = U_mpc[count]
 				except:
-					u_curr = U_mpc[count-1]
+					u_curr = np.zeros((param.get('m'),1))
+
 			else:
 				u_curr = controller.get_u( x_curr,t)
+
+			# except:
+			# 	break
 
 			x_next = x_curr + dynamics.get_dxdt(x_curr,u_curr,t) * param.get('dt')
 
@@ -52,17 +64,21 @@ def main():
 			U.append(u_curr)
 			V.append(dynamics.get_V( x_curr,t))
 
-			# temp 
-			pbar.append( np.matmul( \
-				np.transpose( util.get_my_1()), util.get_p_a(x_curr)))
-			vbar.append( np.matmul( \
-				np.transpose( util.get_my_1()), util.get_v_a(x_curr)))
-			abar.append( np.matmul( \
-				np.transpose( util.get_my_1()), dynamics.get_vdot_a(x_curr,t)))
+			# for error plot 
+			pbar.append( np.dot( \
+				np.transpose( util.get_my_1()), np.dot( util.get_p_a(), x_curr)))
+			vbar.append( np.dot( \
+				np.transpose( util.get_my_1()), np.dot( util.get_v_a(), x_curr)))
+			abar.append( np.dot( \
+				np.transpose( util.get_my_1()), dynamics.get_vdot_a(x_curr)))
 
 			x_curr = x_next
 			count += 1 
 			print( '\t' + str(t) + '/' + str(param.get('T')[-1]))
+
+			# if k > 2:
+			# 	break
+
 
 		X = np.squeeze(np.asarray(X))
 		U = np.squeeze(np.asarray(U))
@@ -74,17 +90,18 @@ def main():
 		C.append( controller.calc_cost(U))
 
 		print('Plots...')
-		plotter.plot_SS(X, param.get('T'), title = str(u) + ' State Space' )
-		plotter.plot_V( V, param.get('T'), title = str(u) + ' Lyapunov' )
-		plotter.plot_U( U, param.get('T'), title = str(u) + ' Controller')
+		plotter.plot_SS(X, param.get('T'), title = str(u_type) + ' State Space' )
+		plotter.plot_V( V, param.get('T'), title = str(u_type) + ' Lyapunov' )
+		plotter.plot_U( U, param.get('T'), title = str(u_type) + ' Controller')
 		plotter.plot_test2( \
-			np.squeeze(pbar) - param.get('pd'), \
-			np.squeeze(vbar) - param.get('vd'), \
-			np.squeeze(abar) - param.get('ad'), \
-			param.get('T'), title = str(u) + ' Errors')
+			np.squeeze(pbar) - np.squeeze(param.get('pd')), \
+			np.squeeze(vbar) - np.squeeze(param.get('vd')), \
+			np.squeeze(abar) - np.squeeze(param.get('ad')), \
+			param.get('T'), title = str(u_type) + ' Errors')
 		print('Plots Complete')
 
-	plotter.plot_cost( C)
+
+	# plotter.plot_cost( C)
 	plotter.save_figs()
 
 

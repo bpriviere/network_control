@@ -19,7 +19,7 @@ def save_figs():
 		plt.close(plt.figure(i))
 	pp.close()
 
-def plot_SS(X,T, title = 'State Space', fig = None, ax = None):
+def plot_SS(X,T, title = None, fig = None, ax = None):
 
 	if fig is None:
 		fig, ax = plt.subplots()
@@ -41,7 +41,8 @@ def plot_SS(X,T, title = 'State Space', fig = None, ax = None):
 		ax.scatter( P_i[-1,0], P_i[-1,1], color = color, 
 			marker = param.get('stop_marker'))
 	
-	plt.title(title)
+	if title is not None:
+		plt.title(title)
 
 def plot_VsTx( delta, T, title = 'VsTx'):
 
@@ -49,9 +50,12 @@ def plot_VsTx( delta, T, title = 'VsTx'):
 	plt.imshow( np.abs(delta)) 
 	plt.colorbar()  
 
-def plot(T,X):
-	fig, ax = plt.subplots()
+def plot(T,X, title = None, fig = None, ax = None):
+	if fig is None or ax is None:
+		fig, ax = plt.subplots()
 	plt.plot( T,X)
+	if title is not None:
+		plt.title(title)
 
 def make_fig():
 	fig, ax = plt.subplots()
