@@ -4,44 +4,33 @@ param = {}
 
 # time
 param['t0'] = 0.
-param['tf'] = 20.
-param['dt'] = 0.1
+param['tf'] = 10.
+param['dt'] = 0.01
 param['T'] = np.arange( param.get('t0'), param.get('tf'), param.get('dt'))
 param['nt'] = len(param.get('T'))
 
 # number of agents
-param['na'] = 3
-param['nb'] = 4
-param['ni'] = param.get('na') + param.get('nb')
+param['na'] = 4
+param['ni'] = param.get('na') # agents plus virtual leader and basis 
 
 # number of dimensions
-param['nd'] = 2 # spatial dimension (ie x,y in R^2)
-param['n'] = 2*param.get('nd')*param.get('ni')
-param['m'] = 2*param.get('nd')*param.get('nb')
+param['nd'] = 2
+param['dof'] = 2*param.get('nd') # degrees of freedom per agent
+param['n'] = param.get('dof')*param.get('ni')
+param['m'] = param.get('dof')*param.get('ni')
+
+# network
+param['R_comm'] = np.inf
+param['lambda_a'] = 0.8
 
 # dynamics
-param['kx'] = 1.
-param['kv'] = 1.
-param['R_des'] = 1.5
-param['lambda_a'] = 1.
-param['R_comm'] = 2.
-
-# controller
-param['mpc_horizon'] = 10
-param['mpc_update'] = 5
-param['controller'] = 'mpc'
-param['control_max'] = 1.
-
-# solver
-param['tau_x'] = 3
-param['tau_u'] = 3
-param['scp_cost_tol'] = 0.1
-param['n_iter_scp'] = 5
+param['k1'] = 10
+param['k2'] = 10
 
 # desired formation
-param['case_xd'] = '3_node_triangle'
-#: '3_node_triangle'
-#: 'single_node'
+param['case_xb'] = None # basis for scaling and rotation invariance
+param['case_xl'] = None # leader for translation invariance
+param['case_xd'] = 'n_node_regular_polygon' # formation
 
 # init
 param['plim'] = 2
@@ -52,5 +41,6 @@ param['min_dist'] = 0.1
 param['fn_plots'] = 'plots.pdf'
 param['start_marker'] = 's'
 param['stop_marker'] = 'x'
-param['ControlAgentColor'] = 'r'
-param['FreeAgentColor'] = 'b'
+param['AgentColor']  = 'b'
+param['LeaderColor'] = 'g'
+param['BasisColor']  = 'k'

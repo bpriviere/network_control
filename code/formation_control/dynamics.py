@@ -1,103 +1,129 @@
 
 from param import param
-from autograd import jacobian
 import utilities as util
-import autograd.numpy as np
+import task_assignment as ta 
+import numpy as np
+from scipy.linalg import block_diag as block_diag
 
-
-def compute_jacobians():
-	param['partial_g_x'] = jacobian(get_g)
-	param['partial_f_x'] = jacobian(get_f)
 
 def get_dxdt(x,u,t):
 	# full dynamics
-	f = get_f(x)
-	g = get_g(x)
+	f = get_f(x,t)
+	g = get_g(x,t)
 	return f + np.dot(g,u)
 
-def get_f( x):
-	# drift dynamics
-	
-	# free agents
-	for i in range(param.get('na')):
-		v_i = util.to_vec(np.dot( util.get_v_i(i), x))
-		a_i = util.to_vec(reynolds( x, i))
 
-		try:
-			f = np.vstack( (f, v_i, a_i))
-		except:
-			f = np.vstack( (v_i, a_i)) 
+def get_f(x,t):
 
-	# control agents
-	for i in range(param.get('nb')):
-		v_i = util.to_vec(np.dot( util.get_v_i(i + param.get('na')), x))
-		a_i = util.to_vec(np.zeros( param.get('nd')))
-		f = np.vstack( (f, v_i, a_i))
+	T = get_T(x,t)
+	Tv = get_Tv(x,t)
+	pi_pv = util.permute_to_pv()
+	pi_ta = np.kron(ta.get_centralized_ta(x,t), \
+		np.eye(param.get('dof')))
+
+	L = np.dot(
+		np.kron( get_L(x), np.eye(param.get('nd'))),
+		T
+		)
+
+	xl = get_xl(x,t)
+	xb = get_xb(x,t)
+	my_1 = np.kron( np.ones((param.get('ni'),1)), np.eye(param.get('dof')))
+
+	z = x - np.dot(my_1,xl) - \
+		np.dot(np.dot(Tv, my_1),xb)
+
+	I = np.eye(param.get('ni')*param.get('nd'))
+	F = np.vstack((
+		np.hstack(( 0*I, I)),
+		np.hstack(( -param.get('k1')*(L+I), -param.get('k2')*(L + I))) ))
+
+	f = np.dot(np.dot(np.dot(np.dot(np.dot( 
+		pi_ta.T, pi_pv.T), F), pi_pv), pi_ta), z)
+
 	return f
 
-def get_g( x):
-	# control matrix
-	g = np.zeros( [param.get('n'), param.get('m')])
 
-	for i in range(param.get('nb')):
-		row_idx = 2*param.get('nd')*i + \
-			2*param.get('na')*param.get('nd') + param.get('nd')
-		col_idx = i*param.get('nd') 
-		g[row_idx:row_idx + param.get('nd'), col_idx:col_idx + param.get('nd')] = \
-			np.eye(param.get('nd')) 
+def get_g(x,t):
+	# control matrix
+	g = np.zeros((param.get('n'), param.get('m')))
 	return g
 
-def get_dfdx(x):
-	dfdx = np.squeeze( param.get('partial_f_x')( x))
-	return dfdx
 
-def get_dgdx(x):
-	dgdx = np.squeeze( param.get('partial_g_x')( x))
-	return dgdx	
+def get_A(x):
+	# Adjacency matrix
+	
+	# pose
+	P = np.dot(util.get_p(),x)
+	
+	X = np.dot( 
+		np.ones((param.get('ni'),1)),
+		util.to_vec(P[np.mod(np.arange(0,len(P)),2)==False]).T)
+	Y = np.dot( 
+		np.ones((param.get('ni'),1)),
+		util.to_vec(P[np.mod(np.arange(0,len(P)),2)==True]).T)
+	D = np.sqrt( 
+		np.power( X - X.T + 1e-9,2) + 
+		np.power( Y - Y.T + 1e-9,2))
 
-def get_linear_dynamics(xbar,ubar,t):
+	A = np.exp( -param.get('lambda_a')*D) * \
+		1.0 * (D < param.get('R_comm'))
+	A = A / np.linalg.norm(A, ord=2, axis=1)
 
-	def prod(dgdx, u):
-		s = 0
-		for i in range(len(u)):
-			s += dgdx[:,i,:]*u[i]
-		return np.squeeze(s)
+	return A
 
-	dfdx = get_dfdx(xbar)
-	dgdx = get_dgdx(xbar)
-	g = get_g(xbar)
-	f = get_f(xbar)
 
-	# continuous time 
-	F = dfdx + prod(dgdx,ubar)
-	B = g
-	d = f + util.to_vec(np.dot( g, ubar)) \
-		- util.to_vec(np.dot( dfdx, xbar)) \
-		- util.to_vec(np.dot( prod( dgdx, ubar), xbar)) \
-		- util.to_vec(np.dot( g, ubar))
+def get_L(x):
+	# Laplacian Matrix
+	A = get_A(x)
+	D = np.zeros( np.shape(A))
+	for i in range( np.shape(A)[0]):
+		D[i,i] = sum( A[i,:])
+	return D - A
 
-	# discrete time
-	F_k = np.eye(param.get('n')) + F*param.get('dt') 
-	B_k = B*param.get('dt')
-	d_k = d*param.get('dt')
 
-	return F_k, B_k, d_k
+def get_pi(x,t):
+	# permutation matrix
+	pi = np.eye(param.get('ni'))
+	return pi
 
-def reynolds( x, i):
-	A   = util.get_A(x)
-	p_i = util.to_vec(np.dot( util.get_p_i(i), x))
-	v_i = util.to_vec(np.dot( util.get_v_i(i), x))
-	a_i = util.to_vec(np.zeros(param.get('nd')))
-	for j in range(param.get('ni')):
-		if i is not j:
-			p_j = util.to_vec(np.dot( util.get_p_i(j), x))
-			v_j = util.to_vec(np.dot( util.get_v_i(j), x))
 
-			r_ij = p_j - p_i
-			dist = np.linalg.norm(r_ij)
+def get_T(x,t):
 
-			a_i = a_i + A[i,j]*( \
-                param.get('kv')*(v_j - v_i) + \
-                param.get('kx')*r_ij*(1 - param.get('R_des')/dist) 
-                )
-	return a_i 
+	# add phase shift for all agents
+	T = param.get('radius_d')[0]*util.get_R(param.get('phase_d')[0])
+	for i in range(1,param.get('na')): 
+		r_i = param.get('radius_d')[i]
+		phi_i = param.get('phase_d')[i]
+		T = block_diag(T, r_i*util.get_R(phi_i))
+
+	return T
+
+def get_Tv(x,t):
+
+	# add phase shift for all agents
+	T = param.get('radius_d')[0]*util.get_R(param.get('phase_d')[0])
+	T = block_diag(T, 0*np.eye(param.get('nd')))
+	for i in range(1,param.get('na')): 
+		r_i = param.get('radius_d')[i] 
+		phi_i = param.get('phase_d')[i] 
+		T = block_diag(T, r_i*util.get_R(phi_i))
+		T = block_diag(T, 0*np.eye(param.get('nd')))
+	return T
+
+
+def get_xl(x,t):
+	# leader state
+	xl = np.zeros((param.get('dof')))
+	return util.to_vec(xl)
+
+
+def get_xb(x,t):
+	# basis state
+	xb = np.zeros((param.get('dof')))
+	xb[0] = 1
+	return util.to_vec(xb)
+
+
+def get_phase(p_b):
+	return np.arctan2(p_b[1],p_b[0])
