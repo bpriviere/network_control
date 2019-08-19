@@ -41,6 +41,12 @@ def get_p_i(i):
 	pi[0, 2*i] = 1
 	return np.kron( pi, np.eye(param.get('nd')))
 
+def get_pv_i(i):
+	# get row vector to extract full state of a single agent
+	pi = np.zeros( (2, 2*param.get('ni')))
+	pi[0, 2*i] = 1
+	pi[1, 2*i+1] = 1
+	return np.kron( pi, np.eye(param.get('nd')))
 
 def get_p_i_idx(i):
 	return i*param.get('dof') + np.arange( 0, param.get('nd'))

@@ -5,12 +5,12 @@ param = {}
 # time
 param['t0'] = 0.
 param['tf'] = 10.
-param['dt'] = 0.01
+param['dt'] = 0.05
 param['T'] = np.arange( param.get('t0'), param.get('tf'), param.get('dt'))
 param['nt'] = len(param.get('T'))
 
 # number of agents
-param['na'] = 4
+param['na'] = 5
 param['ni'] = param.get('na') # agents plus virtual leader and basis 
 
 # number of dimensions
@@ -20,12 +20,18 @@ param['n'] = param.get('dof')*param.get('ni')
 param['m'] = param.get('dof')*param.get('ni')
 
 # network
-param['R_comm'] = np.inf
-param['lambda_a'] = 0.8
+param['R_comm'] = 1
+param['lambda_a'] = 1
 
 # dynamics
-param['k1'] = 10
-param['k2'] = 10
+k = 20
+param['k1'] = k
+param['k2'] = 0.3*k
+param['k_c'] = 1e-18
+param['R_safe'] = 0.001
+
+# task assignment
+param['ta_on'] = True
 
 # desired formation
 param['case_xb'] = None # basis for scaling and rotation invariance
